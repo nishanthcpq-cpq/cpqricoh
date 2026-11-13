@@ -1,0 +1,487 @@
+startTime = getcurrenttimeinmillis();
+retVal = json();
+masterData = json(masterDataString);
+//	"brandSetPickList",
+//	"startupSupplies",
+//	"startupSuppliesGoldAndSilver",
+
+//orderType = "";
+attributeAndValues = jsonarray();
+//main unit
+attrValueObj = json();
+jsonput(attrValueObj, "arraySet", "");
+jsonput(attrValueObj, "attribute", "orderType");
+jsonput(attrValueObj, "value", orderType);
+jsonput(attrValueObj, "item", orderType);
+jsonput(attrValueObj, "quantity", 1);
+jsonput(attrValueObj, "type", "NON-ARRAY");
+jsonput(attrValueObj, "optionFeature", upper(_bm_model_variable_name));
+jsonput(attrValueObj, "IsBundle", "N");
+jsonarrayappend(attributeAndValues, attrValueObj);
+
+//confuiguration type
+attrValueObj = json();
+jsonput(attrValueObj, "arraySet", "");
+jsonput(attrValueObj, "attribute", "configurationType_Family");
+jsonput(attrValueObj, "value", configurationType_Family);
+jsonput(attrValueObj, "type", "NON-ARRAY");
+configureItem = "";
+path = "$.configurationType_Family.partNumber ";
+if (jsonpathcheck(masterData, path)) {
+    configureItem = jsonpathgetsingle(masterData, path, "string", "");
+
+}
+print configureItem;
+jsonput(attrValueObj, "item", configureItem);
+jsonput(attrValueObj, "quantity", 1);
+optionFeature = "";
+path = "$.configurationType_Family.rulePath";
+if (jsonpathcheck(masterData, path)) {
+    optionFeature = jsonpathgetsingle(masterData, path, "string", "");
+}
+print optionFeature;
+jsonput(attrValueObj, "optionFeature", optionFeature);
+jsonput(attrValueObj, "IsBundle", "N");
+jsonarrayappend(attributeAndValues, attrValueObj);
+//end of confuiguration type
+
+
+//Main Unit
+attrValueObj = json();
+jsonput(attrValueObj, "arraySet", "");
+jsonput(attrValueObj, "attribute", "mainUnitEDPCode");
+jsonput(attrValueObj, "value", mainUnitEDPCode);
+jsonput(attrValueObj, "type", "NON-ARRAY");
+jsonput(attrValueObj, "item", mainUnitEDPCode);
+jsonput(attrValueObj, "quantity", 1);
+jsonput(attrValueObj, "optionFeature", mainUnitEDPCodePath);
+jsonput(attrValueObj, "IsBundle", "N");
+jsonarrayappend(attributeAndValues, attrValueObj);
+/*if(_bm_model_variable_name == "PROC7500"){
+
+	attrValueObj = json();		
+	jsonput(attrValueObj,"arraySet","");	
+	jsonput(attrValueObj,"attribute","brandSetPickList");
+	jsonput(attrValueObj,"value",brandSetPickList);
+	jsonput(attrValueObj,"item",brandSetPickList);
+	jsonput(attrValueObj,"type","NON-ARRAY");
+	optionFeature = "";
+	path = "$..brandSetPickList";
+	optionFeaturePath = path + ".[?(@.partNumber == '"+brandSetPickList+"')].rulePath";
+	if(jsonpathcheck(masterData, optionFeaturePath)){
+		optionFeature = jsonpathgetsingle(masterData,optionFeaturePath,"string","");
+	}
+	jsonput(attrValueObj,"optionFeature",optionFeature);
+	jsonarrayappend(attributeAndValues,attrValueObj);
+	
+	attrValueObj = json();	
+	jsonput(attrValueObj,"arraySet","");		
+	jsonput(attrValueObj,"attribute","startupSupplies");
+	jsonput(attrValueObj,"value",startupSupplies);
+	jsonput(attrValueObj,"item",startupSupplies);
+	jsonput(attrValueObj,"type","NON-ARRAY");
+	optionFeature = "";
+	path = "$..startupSupplies";
+	optionFeaturePath = path + ".[?(@.partNumber == '"+startupSupplies+"')].rulePath";
+	if(jsonpathcheck(masterData, optionFeaturePath)){
+		optionFeature = jsonpathgetsingle(masterData,optionFeaturePath,"string","");
+	}
+	jsonput(attrValueObj,"optionFeature",optionFeature);
+	jsonarrayappend(attributeAndValues,attrValueObj);
+	
+	attrValueObj = json();	
+	jsonput(attrValueObj,"arraySet","");		
+	jsonput(attrValueObj,"attribute","startupSuppliesGoldAndSilver");
+	jsonput(attrValueObj,"value",startupSuppliesGoldAndSilver);
+	jsonput(attrValueObj,"item",startupSuppliesGoldAndSilver);
+	jsonput(attrValueObj,"type","NON-ARRAY");
+	optionFeature = "";
+	path = "$..startupSuppliesGoldAndSilver";
+	optionFeaturePath = path + ".[?(@.partNumber == '"+startupSuppliesGoldAndSilver+"')].rulePath";
+	if(jsonpathcheck(masterData, optionFeaturePath)){
+		optionFeature = jsonpathgetsingle(masterData,optionFeaturePath,"string","");
+	}
+	jsonput(attrValueObj,"optionFeature",optionFeature);
+	jsonarrayappend(attributeAndValues,attrValueObj);
+	
+}*/
+
+arrsetAttributes = string[] {
+    "optionFeature1Arrayset",
+    "optionFeature2Arrayset",
+    "optionFeature3Arrayset",
+    "optionFeature4Arrayset",
+    "optionFeature5Arrayset",
+    "optionFeature6Arrayset",
+    "optionFeature7Arrayset",
+    "optionFeature8Arrayset",
+    "optionFeature9Arrayset",
+    "optionFeature10Arrayset",
+    "optionFeature11Arrayset",
+    "optionFeature12Arrayset",
+    "optionFeature13Arrayset",
+    "optionFeature14Arrayset",
+    "optionFeature15Arrayset"
+};
+arrSelectAttributes = string[] {
+    "select_optFeature1",
+    "select_optFeature2",
+    "select_optFeature3",
+    "select_optFeature4",
+    "select_optFeature5",
+    "select_optFeature6",
+    "select_optFeature7",
+    "select_optFeature8",
+    "select_optFeature9",
+    "select_optFeature10",
+    "select_optFeature11",
+    "select_optFeature12",
+    "select_optFeature13",
+    "select_optFeature14",
+    "select_optFeature15"
+};
+arrSetTypeAttributes = string[] {
+    "setType_optFeature1",
+    "setType_optFeature2",
+    "setType_optFeature3",
+    "setType_optFeature4",
+    "setType_optFeature5",
+    "setType_optFeature6",
+    "setType_optFeature7",
+    "setType_optFeature8",
+    "setType_optFeature9",
+    "setType_optFeature10",
+    "setType_optFeature11",
+    "setType_optFeature12",
+    "setType_optFeature13",
+    "setType_optFeature14",
+    "setType_optFeature15"
+};
+arroverrideAttributes = string[] {
+    "Override_optFeature1",
+    "Override_optFeature2",
+    "Override_optFeature3",
+    "Override_optFeature4",
+    "Override_optFeature5",
+    "Override_optFeature6",
+    "Override_optFeature7",
+    "Override_optFeature8",
+    "Override_optFeature9",
+    "Override_optFeature10",
+    "Override_optFeature11",
+    "Override_optFeature12",
+    "Override_optFeature13",
+    "Override_optFeature14",
+    "Override_optFeature15"
+};
+arrItemAttributes = string[] {
+    "item_optFeature1",
+    "item_optFeature2",
+    "item_optFeature3",
+    "item_optFeature4",
+    "item_optFeature5",
+    "item_optFeature6",
+    "item_optFeature7",
+    "item_optFeature8",
+    "item_optFeature9",
+    "item_optFeature10",
+    "item_optFeature11",
+    "item_optFeature12",
+    "item_optFeature13",
+    "item_optFeature14",
+    "item_optFeature15"
+};
+arrQtyAttributes = string[] {
+    "qty_optFeature1",
+    "qty_optFeature2",
+    "qty_optFeature3",
+    "qty_optFeature4",
+    "qty_optFeature5",
+    "qty_optFeature6",
+    "qty_optFeature7",
+    "qty_optFeature8",
+    "qty_optFeature9",
+    "qty_optFeature10",
+    "qty_optFeature11",
+    "qty_optFeature12",
+    "qty_optFeature13",
+    "qty_optFeature14",
+    "qty_optFeature15"
+};
+selectDict = dict("string");
+put(selectDict, "select_optFeature1", getarrayattrstring(select_optFeature1));
+put(selectDict, "select_optFeature2", getarrayattrstring(select_optFeature2));
+put(selectDict, "select_optFeature3", getarrayattrstring(select_optFeature3));
+put(selectDict, "select_optFeature4", getarrayattrstring(select_optFeature4));
+put(selectDict, "select_optFeature5", getarrayattrstring(select_optFeature5));
+put(selectDict, "select_optFeature6", getarrayattrstring(select_optFeature6));
+put(selectDict, "select_optFeature7", getarrayattrstring(select_optFeature7));
+put(selectDict, "select_optFeature8", getarrayattrstring(select_optFeature8));
+put(selectDict, "select_optFeature9", getarrayattrstring(select_optFeature9));
+put(selectDict, "select_optFeature10", getarrayattrstring(select_optFeature10));
+put(selectDict, "select_optFeature11", getarrayattrstring(select_optFeature11));
+put(selectDict, "select_optFeature12", getarrayattrstring(select_optFeature12));
+put(selectDict, "select_optFeature13", getarrayattrstring(select_optFeature13));
+put(selectDict, "select_optFeature14", getarrayattrstring(select_optFeature14));
+put(selectDict, "select_optFeature15", getarrayattrstring(select_optFeature15));
+
+//---------------------
+overidesdict = dict("string");
+put(overidesdict, "Override_optFeature1", getarrayattrstring(Override_optFeature1));
+put(overidesdict, "Override_optFeature2", getarrayattrstring(Override_optFeature2));
+put(overidesdict, "Override_optFeature3", getarrayattrstring(Override_optFeature3));
+put(overidesdict, "Override_optFeature4", getarrayattrstring(Override_optFeature4));
+put(overidesdict, "Override_optFeature5", getarrayattrstring(Override_optFeature5));
+put(overidesdict, "Override_optFeature6", getarrayattrstring(Override_optFeature6));
+put(overidesdict, "Override_optFeature7", getarrayattrstring(Override_optFeature7));
+put(overidesdict, "Override_optFeature8", getarrayattrstring(Override_optFeature8));
+put(overidesdict, "Override_optFeature9", getarrayattrstring(Override_optFeature9));
+put(overidesdict, "Override_optFeature10", getarrayattrstring(Override_optFeature10));
+put(overidesdict, "Override_optFeature11", getarrayattrstring(Override_optFeature11));
+put(overidesdict, "Override_optFeature12", getarrayattrstring(Override_optFeature12));
+put(overidesdict, "Override_optFeature13", getarrayattrstring(Override_optFeature13));
+put(overidesdict, "Override_optFeature14", getarrayattrstring(Override_optFeature14));
+put(overidesdict, "Override_optFeature15", getarrayattrstring(Override_optFeature15));
+
+//-------------------------
+itemDict = dict("string[]");
+put(itemDict, "item_optFeature1", item_optFeature1);
+put(itemDict, "item_optFeature2", item_optFeature2);
+put(itemDict, "item_optFeature3", item_optFeature3);
+put(itemDict, "item_optFeature4", item_optFeature4);
+put(itemDict, "item_optFeature5", item_optFeature5);
+put(itemDict, "item_optFeature6", item_optFeature6);
+put(itemDict, "item_optFeature7", item_optFeature7);
+put(itemDict, "item_optFeature8", item_optFeature8);
+put(itemDict, "item_optFeature9", item_optFeature9);
+put(itemDict, "item_optFeature10", item_optFeature10);
+put(itemDict, "item_optFeature11", item_optFeature11);
+put(itemDict, "item_optFeature12", item_optFeature12);
+put(itemDict, "item_optFeature13", item_optFeature13);
+put(itemDict, "item_optFeature14", item_optFeature14);
+put(itemDict, "item_optFeature15", item_optFeature15);
+
+setTypeDict = dict("string[]");
+put(setTypeDict, "setType_optFeature1", setType_optFeature1);
+put(setTypeDict, "setType_optFeature2", setType_optFeature2);
+put(setTypeDict, "setType_optFeature3", setType_optFeature3);
+put(setTypeDict, "setType_optFeature4", setType_optFeature4);
+put(setTypeDict, "setType_optFeature5", setType_optFeature5);
+put(setTypeDict, "setType_optFeature6", setType_optFeature6);
+put(setTypeDict, "setType_optFeature7", setType_optFeature7);
+put(setTypeDict, "setType_optFeature8", setType_optFeature8);
+put(setTypeDict, "setType_optFeature9", setType_optFeature9);
+put(setTypeDict, "setType_optFeature10", setType_optFeature10);
+put(setTypeDict, "setType_optFeature11", setType_optFeature11);
+put(setTypeDict, "setType_optFeature12", setType_optFeature12);
+put(setTypeDict, "setType_optFeature13", setType_optFeature13);
+put(setTypeDict, "setType_optFeature14", setType_optFeature14);
+put(setTypeDict, "setType_optFeature15", setType_optFeature15);
+
+qtyDict = dict("integer[]");
+put(qtyDict, "qty_optFeature1", qty_optFeature1);
+put(qtyDict, "qty_optFeature2", qty_optFeature2);
+put(qtyDict, "qty_optFeature3", qty_optFeature3);
+put(qtyDict, "qty_optFeature4", qty_optFeature4);
+put(qtyDict, "qty_optFeature5", qty_optFeature5);
+put(qtyDict, "qty_optFeature6", qty_optFeature6);
+put(qtyDict, "qty_optFeature7", qty_optFeature7);
+put(qtyDict, "qty_optFeature8", qty_optFeature8);
+put(qtyDict, "qty_optFeature9", qty_optFeature9);
+put(qtyDict, "qty_optFeature10", qty_optFeature10);
+put(qtyDict, "qty_optFeature11", qty_optFeature11);
+put(qtyDict, "qty_optFeature12", qty_optFeature12);
+put(qtyDict, "qty_optFeature13", qty_optFeature13);
+put(qtyDict, "qty_optFeature14", qty_optFeature14);
+put(qtyDict, "qty_optFeature15", qty_optFeature15);
+
+mainDevicePath = "$.stepNames[?(@.isMainDevice== 'Y')].arraysetName";
+mainDeviceArraySetName = "";
+if (jsonpathcheck(masterData, mainDevicePath)) {
+    mainDeviceArraySetName = jsonpathgetsingle(masterData, mainDevicePath, "string", "NotFound");
+}
+print mainDeviceArraySetName;
+indexes = range(sizeofarray(arrsetAttributes));
+previousAttributeValueJSON = json();
+if (attributeValueString <> "" AND NOT Isnull(attributeValueString)) {
+
+    previousAttributeValueJSON = json(attributeValueString);
+
+}
+for indx in indexes {
+    arrayset = arrsetAttributes[indx];
+    path = "$.." + arrayset;
+    if (jsonpathcheck(masterData, path)) {
+        arrSelect = split(get(selectDict, arrSelectAttributes[indx]), "$,$");
+        //print arrSelect;
+        arrItems = get(itemDict, arrItemAttributes[indx]);
+        //print arrItems;
+        arrQtys = get(qtyDict, arrQtyAttributes[indx]);
+        //print arrQtys;
+        arrSetTypes = get(setTypeDict, arrSetTypeAttributes[indx]);
+        arroverrides = string[];
+        if (containskey(overidesdict, arroverrideAttributes[indx])) {
+            arroverrides = split(get(overidesdict, arroverrideAttributes[indx]), "$,$");
+            //print arroverrides;
+        }
+        bundlePath = "$.stepNames[?(@.IsBundle == 'Y')].arraysetName";
+        if (jsonpathcheck(masterData, bundlePath)) {
+            bundleArraySet = jsonpathgetsingle(masterData, bundlePath, "string", "NotFound");
+            bundleArraySetPos = findinarray(arrsetAttributes, bundleArraySet);
+            if (bundleArraySetPos <> -1) {
+                selectAttr = arrSelectAttributes[bundleArraySetPos];
+                if (containskey(selectDict, selectAttr)) {
+                    bundleSelction = get(selectDict, selectAttr);
+                    if (find(bundleSelction, "true") <> -1 and arrayset <> bundleArraySet) {
+                        continue;
+                    }
+                }
+            }
+
+        }
+        indexes1 = range(sizeofarray(arrSelect));
+        for i in indexes1 {
+            //print mainDeviceArraySetName;
+            //print arrsetAttributes[indx];
+            if (mainDeviceArraySetName == arrsetAttributes[indx] and arrSelect[i] <> "true") { //defaulting device
+                arrSelect[i] = "true";
+                arrItems[i] = jsonpathgetsingle(masterData, path + "[0].partNumber", "string", "NotFound");
+                //arrItems[i] = jsonpathgetsingle(masterData, path+"["+string(i)+"].partNumber","string","NotFound");
+                print "arrItems[i] arrItems[i] " + arrItems[i];
+            }
+            //print arrSelect[i];
+            if (arrSelect[i] == "true" OR arroverrides[i] == "true") {
+                attrValueObj = json();
+                jsonput(attrValueObj, "arraySet", arrsetAttributes[indx]);
+                jsonput(attrValueObj, "attribute", "");
+                jsonput(attrValueObj, "selectAttribute", arrSelectAttributes[indx]);
+                jsonput(attrValueObj, "itemAttribute", arrItemAttributes[indx]);
+                jsonput(attrValueObj, "qtyAttribute", arrQtyAttributes[indx]);
+                jsonput(attrValueObj, "value", arrSelect[i]);
+                if (arroverrides[i] == "true") { ////Defect 29912 - override issue
+                    jsonput(attrValueObj, "value", arroverrides[i]);
+                }
+                jsonput(attrValueObj, "index", i);
+                jsonput(attrValueObj, "item", arrItems[i]);
+                jsonput(attrValueObj, "Override", arroverrides[i]);
+                jsonput(attrValueObj, "quantity", arrQtys[i]);
+                jsonput(attrValueObj, "type", "ARRAY");
+                if (arrSetTypes[i] <> "") {
+                    jsonput(attrValueObj, "selectionSource", "RULE");
+                } else {
+                    jsonput(attrValueObj, "selectionSource", "USER");
+                }
+
+
+                //pathcheck="$..attributeAndValues[?(@.arraySet == '"+arraySet+"' && @.item== '"+arrItems[i]+"' && @.value =='true')].selectedAt";
+                pathcheck = "$..attributeAndValues[?(@.arraySet == '" + arraySet + "' &&  @.item == '" + arrItems[i] + "')].selectedAt"; //Defect 29912 - override issue
+
+                logtime("from attr val string " + pathcheck, 200);
+                if (jsonpathcheck(previousAttributeValueJSON, pathcheck)) {
+                    logtime("from attr val string1 " + pathcheck, 200);
+                    selectedAt = jsonpathgetsingle(previousAttributeValueJSON, pathcheck);
+                    jsonput(attrValueObj, "selectedAt", selectedAt);
+                } else {
+                    logtime("from attr val string2 " + pathcheck, 200);
+                    jsonput(attrValueObj, "selectedAt", getcurrenttimeinmillis());
+                }
+                optionFeature = "";
+                optionFeaturePath = path + ".[?(@.partNumber == '" + arrItems[i] + "')].rulePath";
+                if (jsonpathcheck(masterData, optionFeaturePath)) {
+                    optionFeature = jsonpathgetsingle(masterData, optionFeaturePath, "string", "");
+                }
+                jsonput(attrValueObj, "optionFeature", optionFeature);
+                //--------------SG added	
+                stepname = "";
+                stepnamePath = path + ".[?(@.partNumber == '" + arrItems[i] + "')].stepName";
+                if (jsonpathcheck(masterData, stepnamePath)) {
+                    stepname = jsonpathgetsingle(masterData, stepnamePath, "string", "");
+                }
+                jsonput(attrValueObj, "stepName", stepname);
+                //----------------		
+                isBundle = "N";
+                bundlePath = "$.stepNames[?(@.arraysetName == '" + arrsetAttributes[indx] + "')].IsBundle";
+                if (jsonpathcheck(masterData, bundlePath)) {
+                    isBundle = jsonpathgetsingle(masterData, bundlePath, "string", "N");
+                }
+                jsonput(attrValueObj, "IsBundle", isBundle);
+
+                jsonarrayappend(attributeAndValues, attrValueObj);
+            }
+        }
+
+    }
+}
+jsonput(retVal, "modelName", _bm_model_variable_name);
+jsonput(retVal, "orderType", orderType);
+// 10-23-2026 CHG0105953 --Start
+if (selectedPreowned <> "") {
+    keyArray = jsonkeys(json(selectedPreowned));
+    keysplitArr = split(keyArray[0], "#");
+    attrValueObj = json();
+    jsonput(attrValueObj, "Serial_Number", keysplitArr[1]); //
+    if (find(keyArray[0], "#") <> -1) {
+        selectedItems = jsonget(json(selectedPreowned), keyArray[0], "jsonarray", jsonarray());
+        indexes = range(jsonarraysize(selectedItems));
+        for i in indexes {
+            itemObj = jsonarrayget(selectedItems, i, "json");
+            WareHouse = jsonget(itemObj, "WareHouse", "string", "");
+            jsonput(attrValueObj, "WareHouse", WareHouse); //Serial_Number  
+        }
+        jsonput(retVal, "selectedPreowned", attrValueObj);
+    }
+}
+// 10-23-2026 CHG0105953 --End
+/*if(_bm_pline_variable_name=="productionColor"){
+	jsonput(retVal,"DataTable","Config_Rules_PC");
+}
+if(_bm_pline_variable_name=="multifunctionColor"){
+	jsonput(retVal,"DataTable","Config_Rules_MC");
+}*/
+RULES_TABLE = "";
+if (dataTablesList <> "") {
+    dataTablesListJSON = json(dataTablesList);
+    RULES_TABLE = jsonget(dataTablesListJSON, "CONFIG_RULES", "string", "");
+
+}
+if (RULES_TABLE == "") {
+    throwerror("Rules not found.");
+}
+
+jsonput(retVal, "DataTable", RULES_TABLE);
+jsonput(retVal, "TypeOfProduct", pleaseChooseTheTypeOfTheProduct);
+jsonput(retVal, "configureItem", configureItem);
+jsonput(retVal, "configurationType", configurationType_Family);
+jsonput(retVal, "orderType", orderType);
+jsonput(retVal, "mainUnitEDPCode", mainUnitEDPCode);
+jsonput(retVal, "mainUnitEDPCodePath", mainUnitEDPCodePath);
+jsonput(retVal, "selectedAccount", selectedAccount);
+jsonput(retVal, "logComments", "");
+jsonput(retVal, "attributeAndValues", attributeAndValues);
+
+//------------------Comparing Current and Previous attributeAndValues to find unslected Value
+unselected_json_arr = jsonarray();
+if (previousAttributeValueString <> "" AND NOT Isnull(previousAttributeValueString)) {
+    print "=====================SRINI_9152025-1";
+    print retVal;
+    previousjson = json(previousAttributeValueString);
+    Pre_attr_Values = jsonarray(jsonget(previousjson, "attributeAndValues"));
+    temparr = range(jsonarraysize(Pre_attr_Values));
+    for index in temparr {
+        indexjs = json(jsonarrayget(Pre_attr_Values, index));
+        arraySet = jsonget(indexjs, "arraySet", "string", "");
+        if (arraySet <> "" AND NOT ISnull(arraySet)) {
+            index = jsonget(indexjs, "index", "integer");
+            pathcheck = "$..attributeAndValues[?(@.arraySet == '" + arraySet + "' && @.index == " + string(index) + " && @.value =='true')]";
+            if (jsonpathcheck(retVal, pathcheck) == false) {
+                jsonarrayappend(unselected_json_arr, indexjs);
+            }
+
+        }
+    }
+    print unselected_json_arr;
+}
+jsonput(retVal, "unselectedvalues", unselected_json_arr);
+endTime = getcurrenttimeinmillis();
+logTime(datetostr(getdate(true)) + _bm_model_variable_name + "Set Attribute Value String:Set Attribute val Attribute", endTime - startTime);
+return jsontostr(retVal);

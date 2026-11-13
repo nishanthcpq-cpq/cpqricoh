@@ -1,0 +1,190 @@
+lineDatilsJSON = pricingDocument;
+//if(_supplier_company_name <> ""){
+        //lineDatilsJSON = json(_supplier_company_name);
+//} 
+
+print  " suresh debbigging start ";
+
+t_pricing_perf = getCurrentTimeInMillis();
+
+ combinedPriceListMenu = jsonget(lineDatilsJSON, "combinedPriceListMenu_c", "string");
+
+rebatePercentage = 0.0;
+rebatePercentage = jsonget(lineDatilsJSON, "rebatepercentage_Input_c", "float",0.00);
+//print rebatePercentage ;
+lines = jsonget(lineDatilsJSON, "lines", "jsonarray");
+edpCodesJSONArray = jsonpathgetmultiple(lineDatilsJSON,"$..lines[?(@._partNumber != '')]._partNumber");
+edpCodesArr = util.convertJSONArrayToStringArray(edpCodesJSONArray);
+linesjson = json () ;
+indexes = range(jsonarraysize(lines));
+print "Calculate Pricing HW START:::"+getstrdate();
+print "Suresh Debug  : 108 START    Pricing Portal log "; print lineDatilsJSON ;    print "Suresh Debug  : 108 END"; // acquisitionType_c
+ 
+for index in indexes {
+		
+		line = jsonarrayget(lines, index, "json");
+		partNumber = jsonget(line,"_partNumber","string");
+                print "partnumber : " + partNumber ;
+		if(partNumber == ""){
+			continue;
+		}
+		cashPrice = jsonget(line,"hwCashPrice_c","float",0.0);
+		sMA = jsonget(line,"sMA_c","float",0.0);
+		leaseBasisPrice = jsonget(line,"hwLeaseBasisPrice_c","float",0.0);
+		minGPPercentage = jsonget(line,"minGPPercentage_l_c","float",0.0);//jsonget(line,"minGPPercentage_c","float",0.0);
+		hardwareTargetPrice = jsonget(line,"targetPriceOutPut_c","float",0.0); //jsonget(line,"hardwareTargetPrice_c","float",0.0);
+		defaultListPrice = jsonget(line,"defaultListPrice_c","float",0.0);//jsonget(line,"partListPrice_c","float",0.0);//jsonget(line,"defaultListPrice_c","float",0.0);
+		price_quantity = jsonget(line,"priceQuantity_c","integer",1);
+                		
+		//defaultListPrice = price_list_price_each;
+		unitSRP = defaultListPrice;
+		unitStandardCost = 0.0;
+		initialSalesCost = 0.0;
+		finalSalesCost = 0.0;
+		contractedPrice = 0.0;
+		stretchPriceUplift = 0.0;
+		stretchPrice = 0.0;
+		roundStretchPrice = 0.0;
+		
+		unitSellingPrice = 0.0;
+		codePresent = false;
+		vendorQuoteNumber_VLIG = "";
+		businessLine_c = "";
+		discounttype_l = "";
+		discountAmountt_l = 0.0;
+		vendorCost_c = 0.0;
+		part_custom_field27 = "";
+		modelNameForPart = "";
+		/*if (vendorQuoteNumber_VLIG <> "") {
+			unitSRP = unitSRPBackend_l;
+		} elif (vpFlag) {
+			unitSRP = unitSellingPrice;
+		}
+		if (unitSRPBackend_l > 0 AND modelnameforpart <> "Equipment") {
+			unitSRP = unitSRPBackend_l;
+		}
+		if (FIPItemsFlag == "Y") {
+			unitSRP = (defaultListPrice / 2) * FIPvalidFieldQty;
+		}*/
+		unitStandardCost = unitSRP * (1 - minGPPercentage);
+		
+		if (cashPrice > 0.0) {
+			initialSalesCost = initialSalesCost + (cashPrice * (rebatePercentage / 100));
+		} elif (codePresent AND cashPrice == 0.0) {
+			initialSalesCost = 0.0;
+		} else {
+			initialSalesCost = initialSalesCost + (initialSalesCost * (rebatePercentage / 100));
+		}
+
+		finalSalesCost = 0.0;
+		if (unitSRP <> 0.0 AND initialSalesCost <> 0.0) {
+			salesCostArray = float[] {
+				unitSRP,
+				initialSalesCost
+			};
+			finalSalesCost = min(salesCostArray);
+		} elif (unitSRP == 0.0 AND initialSalesCost <> 0.0) {
+			finalSalesCost = initialSalesCost;
+		} elif (unitSRP <> 0.0 AND initialSalesCost == 0.0 AND NOT codePresent ) {
+			finalSalesCost = unitSRP;
+		}
+		if ((businessLine_c == "ITS" AND modelNameForPart == "Equipment") OR (businessLine_c == "ITS" AND part_custom_field27 == "VP")) {
+			contractedPrice = unitSRP;
+		} else {
+			contractedPrice = finalSalesCost * (1 + hardwareTargetPrice);
+			if (contractedPrice > unitSRP) {
+				contractedPrice = unitSRP;
+			}
+		}
+		if (codePresent) {
+			contractedPrice = cashPrice;
+			unitSellingPrice = contractedPrice;
+		}
+		if (businessLine_c == "PS" OR businessLine_c == "TRADITIONAL" OR businessLine_c == "ITS") {
+			if (vendorQuoteNumber_VLIG <> "" AND businessLine_c <> "ITS") {
+				contractedPrice = unitSRP;
+			} elif (unitSRP <> 0.0 AND contractedPrice <> 0.0 AND contractedPrice > unitSRP) {
+				contractedPriceArray = float[] {
+					unitSRP,
+					contractedPrice
+				};
+				contractedPrice = min(contractedPriceArray);
+			} elif (unitSRP <> 0.0 AND contractedPrice == 0.0 AND NOT codePresent) {
+				contractedPrice = unitSRP;
+			}
+			unitSellingPrice = contractedPrice;
+		}
+		discounttype = discounttype_l;
+		discountValueLine = discountAmountt_l;
+		discountAmt = 0.0;
+
+		if (discounttype == "" OR discounttype == "Stretch") {
+			unitSellingPrice = contractedPrice;
+		} elif (discounttype == "Override") {
+			discountAmt = discountValueLine;
+			unitSellingPrice = discountValueLine;
+		} elif (discounttype == "Amount") {
+			discountAmt = discountValueLine;
+			unitSellingPrice = contractedPrice - discountValueLine;
+		} elif (discounttype == "Percent") {
+			discountAmt = ((discountValueLine / 100) * contractedPrice);
+			unitSellingPrice = contractedPrice - ((discountValueLine / 100) * contractedPrice);
+		}
+
+		/*if (businessLine_c == "PS" AND includeInMS_l AND part_custom_field27 == "VP") {
+			unitSellingPrice = unitSRP * CostOfMoney;
+		}
+		if (((chargeType_l == "One Time" AND businessLine_c == "PS" AND includeInMS_l) OR (businessLine_c == "PS" AND includeInMS_l AND part_custom_field27 == "VP")) AND CostOfMoney <> 0 AND termMonthinNumber <> 0) {
+			unitSRP = unitSRP * CostOfMoney;
+			unitStandardCost = unitStandardCost * CostOfMoney;
+			finalSalesCost = finalSalesCost * CostOfMoney;
+			contractedPrice = contractedPrice * CostOfMoney;
+		}*/
+		if (vendorQuoteNumber_VLIG <> "" AND (vendorCost_c == 0.0 OR vendorCost_c == 0.01)) {
+			unitStandardCost = vendorCost_c;
+		}
+		
+		/*if (businessLine_c == "PS" AND includeInMS_l AND part_custom_field27 == "VP") {
+			unitSellingPrice = unitSRP * CostOfMoney;
+			extSellingPrice = price_quantity * unitSellingPrice;
+		}*/
+		unitNetPrice = unitSellingPrice;
+		extNetSellprice = unitNetPrice * price_quantity;
+                print partNumber;
+               // print UnitSRP;
+		jsonput(line, "unitSRPO_l_c", UnitSRP);
+		jsonput(line, "unitCostOutput_c", unitStandardCost);
+		jsonput(line, "unitSalesCostOutPut_c", finalSalesCost);
+		jsonput(line, "contractedUnitPriceOutput_c", contractedPrice);
+		jsonput(line, "contractPriceOutput_c", contractedPrice);
+		jsonput(line, "targetPriceOutPut_c", hardwareTargetPrice);
+		jsonput(line, "unitNetPriceOutPut_c", unitNetPrice);
+		jsonput(line, "extNetPriceOutPut_c", extNetSellprice);
+               // print "from calculate hw pricing portal lib****:";
+               // print getdate(true);
+             //   print line;
+		/*jsonput(line, "unitSRP_l", UnitSRP);
+		jsonput(line, "unitCost_l", unitStandardCost);
+		jsonput(line, "unitSalesCost_l", finalSalesCost);
+		jsonput(line, "contractedUnitPrice_l", contractedPrice);
+		jsonput(line, "contractPrice_l", contractedPrice);
+		jsonput(line, "targetPrice_l", hardwareTargetPrice);
+		jsonput(line, "unitNetPrice_l", unitNetPrice);
+		jsonput(line, "extNetPrice_l", extNetSellprice);		
+		*/
+}  
+print "Calculate Pricing HW END:::"+getstrdate();
+print  " suresh debbigging END ";
+
+print "pricingDocument pricingDocument*****";
+print "Suresh108: Beforeformulas start";
+
+
+
+print lineDatilsJSON;
+logtime(  "t_pricing_perf Before Formulas Suresh using Attribute matrices", getcurrenttimeinmillis() - t_pricing_perf);
+print " incremental priing exxecution logs";
+print (getcurrenttimeinmillis() - t_pricing_perf)*100000 ;
+print  "t_pricing_perf Before Formulas Suresh using Attribute matrices" ;
+return lineDatilsJSON;
+//return linesjson ;

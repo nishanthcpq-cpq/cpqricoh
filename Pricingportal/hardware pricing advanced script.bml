@@ -1,0 +1,5 @@
+params = json();
+paramsStr = jsontostr(params);
+//print pricingDocument;
+return util.calculatePricingHW(pricingDocument, paramsStr);
+//return pricingDocument;

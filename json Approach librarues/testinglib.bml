@@ -1,0 +1,2410 @@
+inputJSON = json();
+jsonput(inputJSON,"debug",true);
+return commerce.tetsing_lib_l_c_c(inputJSON);
+
+
+/******************************************************************************************************/
+/*
+Author : SureshThota
+Functionality : To calculate Hardwrae Family Pricings 
+
+*/
+/******************************************************************************************************/
+// --------------------------------------------------
+// INITIALIZATION
+// --------------------------------------------------
+
+result = "";
+Message = "";
+HWSRP = 0.00;
+xaasFlag = false;
+parentVarname = "";
+HWItemFound = false;
+PropertyTax_Uplift = 0.00;
+updateLineItemsJson = "";
+pSlikageMainJson = json();
+RunEFEE = "True";
+itemJSON = json();
+RsiItemjson = json();
+
+documentNumberStrArr = string[];
+priceCalculationInfoArr = jsonarray();
+
+groupSeqDict = dict("string");
+ContractedFlagJson = json();
+DiscountAppliedJson = json();
+
+
+BaseUnitArray = string[];
+
+HWLineIdJson = json();
+linkedLineArr = string[];
+
+ENVT_FEE_Price = dict("string");
+ENVT_FEE_ExtPrice = dict("string");
+ENVT_FEE_Qty = dict("string");
+ENVT_FEE_Parent = dict("string");
+ENVT_FEE_Item_Arr = string[];
+pSlinkageJsonArry = jsonarray();
+
+federalFlg = false;
+
+ReJSON = json();
+
+lineDetailsJSON = inputJSON;
+debug = jsonget(inputJSON, "debug", "boolean", false);
+if (debug) {
+    params = json();
+    lineDetailsJSON = commerce.getQuoteData_c(jsontostr(params));
+    //print commerce.getQuoteData_c(jsontostr(params));
+}
+result = "";
+linesJArray = jsonarray();
+ActionTrigger = "Before Formulas";
+
+
+//Header Attributes
+headerJSON = jsonget(lineDetailsJSON, "header", "json", json());
+
+bsId = jsonpathgetsingle(lineDetailsJSON, "$.header._system_buyside_id", "string", "");
+transactionID = jsonpathgetsingle(lineDetailsJSON, "$.header.transactionID_t", "string", "");
+modelsContainsInQuote = jsonpathgetsingle(lineDetailsJSON, "$.header.modelsContainsInQuote_t", "string", "");
+termMonths_t = jsonpathgetsingle(lineDetailsJSON, "$.header.termMonths_t", "string", "");
+contractOtherTerm_t = jsonpathgetsingle(lineDetailsJSON, "$.header.contractOtherTerm_t", "integer", 0);
+iTSMRRTotalDealPricingMethod_c = jsonpathgetsingle(lineDetailsJSON, "$.header.iTSMRRTotalDealPricingMethod_c", "string", "");
+gMPercentageITS_c = jsonpathgetsingle(lineDetailsJSON, "$.header.gMPercentageITS_c", "float", 0.0);
+monthlyPaymentITS_c = jsonpathgetsingle(lineDetailsJSON, "$.header.monthlyPaymentITS_c", "float", 0.0);
+racUserOrg_c = jsonpathgetsingle(lineDetailsJSON, "$.header.rACUserOrg_c", "string", "");
+fYStartCustomerType_t = jsonpathgetsingle(lineDetailsJSON, "$.header.fYStartCustomerType_t", "string", "");
+fYStartCustomerTypeException_t = jsonpathgetsingle(lineDetailsJSON, "$.header.fYStartCustomerTypeException_t", "string", "");
+fYStartProductionZBA_t = jsonpathgetsingle(lineDetailsJSON, "$.header.fYStartProductionZBA_t", "string", "");
+segmentLevel_t = jsonpathgetsingle(lineDetailsJSON, "$.header.segmentLevel_t", "string", "");
+combinedPriceListMenu_c = jsonpathgetsingle(lineDetailsJSON, "$.header.combinedPriceListMenu_c", "string", "");
+segment_t = jsonpathgetsingle(lineDetailsJSON, "$.header.segment_t", "string", "");
+marketplace_t = jsonpathgetsingle(lineDetailsJSON, "$.header.marketplace_t", "string", "");
+acquisitionType_t = jsonpathgetsingle(lineDetailsJSON, "$.header.acquisitionType_t", "string", "");
+pricelistRateFlag_c = jsonpathgetsingle(lineDetailsJSON, "$.header.pricelistRateFlag_c", "boolean", false);
+bs_id = jsonpathgetsingle(lineDetailsJSON, "$.header._system_buyside_id", "string", "");
+
+
+
+
+
+
+leaseTerm = "";
+if (leaseTerm_t == "Other Terms") {
+    leaseTerm = string(otherTerm_t);
+} else {
+    leaseTerm = leaseTerm_t;
+
+}
+//End - CR100
+currentDatewithTimeStamp = getstrdate();
+//currentDate = getstrdate();
+currentDateStrArr = split(currentDatewithTimeStamp, " ");
+currentDate = strtojavadate(datetostr(strtojavadate(currentDateStrArr[0], "MM/dd/yyyy"), "MM-dd-yyyy"), "MM-dd-yyyy");
+
+
+//print modelsContainsInQuote;
+if ((find(modelsContainsInQuote, "Intelligent Print Service") <> -1) OR (find(modelsContainsInQuote, "Ricoh Process AP") <> -1) OR (find(modelsContainsInQuote, "HWaaS") <> -1)) {
+    xaasFlag = true;
+}
+
+DSPValuesArray = string[];
+RGCPortfolioCategoryArray = string[];
+LookupQuerydata = bmql("select LOOKUP_CODE from RAC_SC_Lookup where  ((LOOKUP_TYPE ='RGC_DSP_VALUES' OR LOOKUP_TYPE ='ENT_SERV_CATEGORY_PORTFOLIO_CATEGORY' )  AND ENABLE_FLAG ='Y')");
+for each in LookupQuerydata {
+    Lookupvalue = get(each, "LOOKUP_CODE");
+    LOOKUP_TYPE = get(each, "LOOKUP_TYPE");
+    if (LOOKUP_TYPE == "RGC_DSP_VALUES") {
+        if (findinarray(DSPValuesArray, Lookupvalue) == -1) {
+            append(DSPValuesArray, Lookupvalue);
+        }
+    } else {
+        if (findinarray(RGCPortfolioCategoryArray, Lookupvalue) == -1) {
+            append(RGCPortfolioCategoryArray, Lookupvalue);
+        }
+    }
+}
+
+
+/*Start Changes done for ITS-RWA -Supriya*/
+partItemIDJson = json();
+if (modelsContainsInQuote <> "Managed Print Services") {
+    // 01_03_2024 #CHG0085215 for MPS_Performance_Code_Changes_by_Vasundhara - Added if condition so that below code should not run for MPS
+    if (find(modelsContainsInQuote, "XaaS") <> -1) {
+        parentVarname = "XaaS";
+    } elif (find(modelsContainsInQuote, "HWaaS") <> -1) {
+        parentVarname = "Hwaas";
+    } elif (find(modelsContainsInQuote, "Ricoh Process AP") <> -1) {
+        parentVarname = "RPAP";
+    }
+    /*Set the Json-partItemIDJson to store Price related details from standard table-Oracle_BomItemDef2*/
+    recordSet = bmql("select OracleSetName ,ItemId,PartNumber from Oracle_BomItemDef2 where ParentVariableName = $parentVarname");
+    for eachRow in recordSet {
+        ItemId = get(eachRow, "ItemId");
+        partNumber = get(eachRow, "PartNumber");
+        jsonput(partItemIDJson, partNumber, ItemId);
+        jsonput(itemJSON, partNumber + get(eachRow, "OracleSetName"), ItemId);
+    }
+    /*End Changes done for ITS-RWA -Supriya*/
+}
+
+
+if (iTSPricingRuleResponse_c <> "") {
+    updateLineItemsJson = iTSPricingRuleResponse_c;
+}
+
+//print updateLineItemsJson ;
+if (updateLineItemsJson <> "" AND updateLineItemsJson <> "null" AND not(isnull(updateLineItemsJson))) {
+    updateLineItemsJsonInJson = json(updateLineItemsJson);
+    documentNumberFound = jsonpathcheck(updateLineItemsJsonInJson, "$..items..calculationInfo..documentNumber");
+    //print "documentNumberFound "; print documentNumberFound ;
+    priceCalculationFound = jsonpathcheck(updateLineItemsJsonInJson, "$..items..calculationInfo"); //01_19_2024 updated for MPS_Performance_Code_Changes_by_Vasundhara for CalculatePrice API call
+
+    if (documentNumberFound) {
+        documentNumberArr = jsonpathgetmultiple(updateLineItemsJsonInJson, "$..items..calculationInfo..documentNumber");
+        arraysize = range(jsonarraysize(documentNumberArr));
+        for arr in arraysize {
+            append(documentNumberStrArr, jsonarrayget(documentNumberArr, arr));
+        }
+        priceCalculationInfoArrdata = jsonpathgetmultiple(updateLineItemsJsonInJson, "$..items..calculationInfo");
+        CalculationInfoArrdatasize = range(jsonarraysize(priceCalculationInfoArrdata));
+        for item in CalculationInfoArrdatasize {
+            CalculationInfoArrdata = jsonarrayget(priceCalculationInfoArrdata, item, "jsonarray");
+            CalculationInfoArrdataindexsize = jsonarraysize(CalculationInfoArrdata);
+            if (CalculationInfoArrdataindexsize <> 0) {
+                jsonarrayappend(priceCalculationInfoArr, CalculationInfoArrdata);
+            }
+        }
+    }
+}
+
+ENVT_FEE_ExtPrice = dict("string");
+
+//RsiItemArray = string[]{"RSIESNTL-A4-1YR-SUB-PS1", "RSI-ESS-OUT-SUB", "RSI-HEALTHCARE-SUB", "RSI-LEGAL-SUB" , "RSI-WF-SUB"};
+StickyCodeRecords = BMQL("select SUBSCRIPTION_ELIGIBI , PS_EDP_CODE from RAC_Sticky_Code where SUBSCRIPTION_ELIGIBI = 'Yes'");
+//where PS_EDP_CODE in $RsiItemArray");
+
+for StickyCode in StickyCodeRecords {
+    subscriptin_eligibility = get(StickyCode, "SUBSCRIPTION_ELIGIBI");
+    if (lower(subscriptin_eligibility) == "yes") {
+        jsonput(RsiItemjson, get(StickyCode, "PS_EDP_CODE"), get(StickyCode, "PS_EDP_CODE"));
+    }
+}
+
+
+
+TotalBuyoutAmount = 0;
+size = range(jsonarraysize(tradeInItems_t_c));
+for s in size {
+    buyoutAmountF = 0;
+    buyoutAmount = jsonget(json(jsonarrayget(tradeInItems_t_c, s)), "buyoutAmountText_TradeInItems_t_c");
+    buyoutType = jsonget(json(jsonarrayget(tradeInItems_t_c, s)), "buyoutType_TradeInItems_t_c");
+    if (buyoutAmount <> "" AND not(isnull(buyoutAmount))) {
+        buyoutAmountF = atof(buyoutAmount);
+        if (buyoutType <> "Refinance") {
+            TotalBuyoutAmount = TotalBuyoutAmount + buyoutAmountF;
+        }
+    }
+}
+
+EnvtFee_FLAG = true;
+if ((find(lower(segment_t), "federal") <> -1) OR (find(lower(accountChannel_c), "federal") <> -1)) {
+    federalFlg = true;
+}
+//Added the Pricelist rate condition - CR100- Sheema
+if (contingencyDetails_c == true OR leaseTypeList_c == "OPERATING RENTAL" OR pricelistRateFlag_c) {
+
+    //FEDERAL condition commented as part of defect 32836
+    // AND  cERNum_c <> 0  )
+    //) OR federalFlg) 
+    EnvtFee_FLAG = false;
+}
+termMonthinNumber = 0;
+if (isnumber(termMonths_t)) {
+    termMonthinNumber = integer(atof(termMonths_t));
+} elif (termMonths_t == "Other") {
+    termMonthinNumber = contractOtherTerm_t;
+}
+CostOfMoney = 0.00;
+CostFactorRecordSet = bmql("SELECT TermMonths, CostOfMoney FROM RAC_CostOfMoney WHERE TermMonths = $termMonthinNumber");
+for each in CostFactorRecordSet {
+    CostOfMoney = getfloat(each, "CostOfMoney");
+}
+
+
+//Below Lines have been taken from Promotion pricing Library
+promotionjson = json();
+Promotionjson1 = json();
+promotionjsonarray = jsonarray();
+
+partsarrayjson = jsonpathgetmultiple(lineDetailsJSON, "$..lineDetails[?(@._part_number != '')]._part_number");
+partarray = util.convertJSONArrayToStringArray(partsarrayjson);
+
+//print "YYY" ; 
+//print partarray ;
+
+promotionDT = BMQL("select * from RAC_Promotions where ItemNumber in $partarray ");
+
+for prodtiondata in promotionDT {
+
+    itemNumber = get(prodtiondata, "ItemNumber");
+    promoCode = get(prodtiondata, "PromoCode");
+    description = get(prodtiondata, "Description");
+    promoType = get(prodtiondata, "PromoType");
+    discountValue = get(prodtiondata, "DiscountValue");
+    startDate = get(prodtiondata, "StartDate");
+    endDate = get(prodtiondata, "EndDate");
+    minQty = get(prodtiondata, "MinQty");
+    jsonput(promotionjson, "ItemNumber", itemNumber);
+    jsonput(promotionjson, "PromoCode", promoCode);
+    jsonput(promotionjson, "Description", description);
+    jsonput(promotionjson, "PromoType", promoType);
+    jsonput(promotionjson, "DiscountValue", discountValue);
+    jsonput(promotionjson, "StartDate", startDate);
+    jsonput(promotionjson, "EndDate", endDate);
+    jsonput(promotionjson, "MinQty", minQty);
+    jsonarrayappend(promotionjsonarray, promotionjson);
+
+} //print promotionjsonarray ;
+
+jsonput(Promotionjson1, "Promotionjson", (promotionjsonarray));
+arrlocationSiteID_l = jsonpathgetmultiple(lineDetailsJSON, "$..lineDetails[?(@.locationSiteID_l!= '' )].locationSiteID_l");
+locationSiteID = util.convertJSONArrayToStringArray(arrlocationSiteID_l);
+
+
+locationsitearray = string[];
+
+if (jsonarraysize(customerAccountResult_t) >= 1) {
+    arraysizeAddress = range(jsonarraysize(customerAccountResult_t));
+    for each in arraysizeAddress {
+        LocationID = jsonget(json(jsonarrayget(customerAccountResult_t, each)), "locationSiteID_Result_t");
+        // if (LocationID == line.locationSiteID_l) {
+        if (findinarray(locationSiteID, LocationID) <> -1) {
+            if (findinarray(locationsitearray, LocationID) <> -1) {
+                append(locationsitearray, LocationID);
+            }
+            province = jsonget(json(jsonarrayget(customerAccountResult_t, each)), "state_Result_t");
+        }
+    }
+}
+
+Records_RCI_ENVT_FEE = BMQL("select EHF_CHARGE ,ITEM , ACTIVE_START_DATE ,ACTIVE_END_DATE from RCI_ENVT_FEE where ITEM in  $partarray and PROVINCE in $locationsitearray ");
+
+ReJSON = json();
+
+for Re in Records_RCI_ENVT_FEE {
+    ITEM = get(Re, "ITEM");
+    PROVINCE = get(Re, "PROVINCE");
+    jsonput(ReJSON, ITEM + PROVINCE + "EHF_CHARGE", get(Re, "EHF_CHARGE"));
+    //  EHF_CHARGE = get(Re, "EHF_CHARGE");
+    // activeStartDatewithTimeStamp = get(Re, "ACTIVE_START_DATE");
+    jsonput(ReJSON, ITEM + PROVINCE + "ACTIVE_START_DATE", get(Re, "ACTIVE_START_DATE"));
+    // activeEndDatewithTimeStamp = get(Re, "ACTIVE_END_DATE");
+    jsonput(ReJSON, ITEM + PROVINCE + "ACTIVE_END_DATE", get(Re, "ACTIVE_END_DATE"));
+}
+
+
+TableQueryDict = dict("string");
+TableQueryJson = commerce.queryDatatableForPricing_c(TableQueryDict);
+
+
+
+
+parentVarnameArr = string[];
+
+itemJSON = json();
+partItemIDJson = json();
+retDict = dict("string");
+Partdict = dict("string");
+
+lineArray = jsonget(lineDetailsJSON, "lineDetails", "jsonarray", jsonarray());
+numberOfLines = jsonarraysize(lineArray);
+indices = range(numberOfLines);
+bundleDict = dict("string");
+allBundleNames = string[];
+BundleArray = string[];
+bundleNameXaaS = "";
+
+// lineBOMAttributes = jsonpathgetmultiple(lineDetailsJSON, "$..lineDetails[?(@.bundleNameXaaS_c != '' && @._line_bom_attributes != '')]._line_bom_attributes");
+// bundleNameJSONArray = jsonpathgetmultiple(lineDetailsJSON, "$..lineDetails[?(@.bundleNameXaaS_c != '' && @.bundleName_l != '')].bundleName_l");
+// bundleNameXaaSJSONArray = jsonpathgetmultiple(lineDetailsJSON, "$..lineDetails[?(@.bundleNameXaaS_c != '' && @._line_bom_attributes != '')].bundleNameXaaS_c");
+// allBundleNames = util.convertJSONArrayToStringArray(bundleNameJSONArray);
+
+// inputJSONArray = jsonpathgetmultiple(lineDetailsJSON, "$..lineDetails[?(@._part_custom_field23 != '')]._part_custom_field23");
+// itemTypeArray = util.convertJSONArrayToStringArray(inputJSONArray);
+// processGroupDict = util.getProcessGroup(itemTypeArray);
+
+//itemType = part_custom_field23; //Item Type from Part DB
+itemTypeRecordSet = Recordset();
+itemtypejsonarray = jsonpathgetmultiple(lineDetailsJSON, "$..lineDetails[?(@._part_custom_field23 != '')]._part_custom_field23");
+itemtypearray = util.convertJSONArrayToStringArray(itemtypejsonarray);
+sizejsonarray = (jsonarraysize(itemtypejsonarray));
+//sizejsonarray = range(jsonarraysize(itemtypejsonarray));
+
+ItemTypeJson = json();
+if (sizejsonarray > 0) {
+    itemTypeRecordSet = bmql("select ItemType, ProcessGroup from RAC_ITEM_TYPE where ItemType IN $itemtypearray");
+
+    for eachItemType in itemTypeRecordSet {
+        ItemType = get(eachItemType, "ItemType");
+        processGroup = get(eachItemType, "ProcessGroup");
+        jsonput(ItemTypeJson, ItemType, processGroup);
+    }
+}
+if (isnumber(termMonths_t)) {
+    termMonthinNumber = integer(atof(termMonths_t));
+} elif (termMonths_t == "Other") {
+    termMonthinNumber = contractOtherTerm_t;
+}
+
+
+
+RGCUnitSalesCost = 0.0;
+RGCUnitNetPrice = 0.0;
+ThresholdValue = 0.0;
+subtotal = 0.0;
+TotalDealAmount = 0.0;
+AirPercent_Total = 0.0;
+//TableQueryJson = json();
+lineJSON = json();
+for i in indices {
+    lineJSON = jsonarrayget(lineArray, i, "json");
+
+    parent_line_item = jsonget(lineJSON, "_parent_line_item", "string", "");
+    xaasFlag = false;
+    if (parent_line_item == "XaaS" OR parent_line_item == "HWaaS" OR parent_line_item == "RPAP" OR parent_line_item == "Ricoh Process AP") {
+        xaasFlag = true;
+        jsonarrayappend(linesJArray, lineJSON);
+        continue;
+    }
+    modelName_l_c = jsonget(lineJSON, "modelName_l_c", "string", "");
+    model_name = jsonget(lineJSON, "_model_name", "string", "");
+    part_number = jsonget(lineJSON, "_part_number", "string", "");
+    //  if( part_number <> "409664M") { continue ;}
+
+    bundleName = jsonget(lineJSON, "bundleName_l", "string", ""); /// "MODELBUNDLENAME": "PRINTINONE-IMC2510-ADV",
+    rWAFlatPricing = jsonget(lineJSON, "rWAFlatPricing_c", "boolean", false);
+    substituteQuantity = jsonget(lineJSON, "substituteQuantity_c", "integer", 1);
+    price_quantity = jsonget(lineJSON, "_price_quantity", "integer", 1);
+    lineItemBOMAttributesStr = jsonget(lineJSON, "_line_bom_attributes", "string", "");
+    document_Number = jsonget(lineJSON, "_document_number", "string", "");
+    parentDocNumber = jsonget(lineJSON, "_parent_doc_number", "string", "");
+    price_quantity = jsonget(lineJSON, "_price_quantity", "integer", 1);
+    model_variable_name = jsonget(lineJSON, "_model_variable_name", "string", "");
+    // document_Number = jsonget(lineJSON, "_document_number", "string", "");
+    parent_doc_number = jsonget(lineJSON, "_parent_doc_number", "string", "");
+    group_sequence_number = jsonget(lineJSON, "_group_sequence_number", "string", "");
+    unitSalesCost_l = jsonget(lineJSON, "unitSalesCost_l", "float", 0.0);
+    unitCost_l = jsonget(lineJSON, "unitCost_l", "float", 0.0);
+    chargeType_l = jsonget(lineJSON, "chargeType_l", "string", "");
+    bundleSubscription = jsonget(lineJSON, "bundleSubscription", "string", "");
+    extSRP_l = jsonget(lineJSON, "extSRP_l", "float", 0.0);
+    extUnitStandardCost_l = jsonget(lineJSON, "extUnitStandardCost_l", "float", 0.0);
+    contractedUnitPrice_l = jsonget(lineJSON, "contractedUnitPrice_l", "float", 0.0);
+    extUnitContractTargetPrice_l = jsonget(lineJSON, "extUnitContractTargetPrice_l", "float", 0.0);
+    extNetPrice_l = jsonget(lineJSON, "extNetPrice_l", "float", 0.0);
+    extSellingPrice_l = jsonget(lineJSON, "extSellingPrice_l", "float", 0.0);
+    unitSellingPrice_l = jsonget(lineJSON, "unitSellingPrice_l", "float", 0.0);
+    extUnitSalesCost_l = jsonget(lineJSON, "extUnitSalesCost_l", "float", 0.0);
+    unitSRP_l = jsonget(lineJSON, "unitSRP_l", "float", 0.0);
+    subscriptionTerm_l = jsonget(lineJSON, "subscriptionTerm_l", "string", "");
+    nonStandardTerm_l = jsonget(lineJSON, "nonStandardTerm_l", "string", "");
+    bundleNameXaaS_c = jsonget(lineJSON, "bundleNameXaaS_c", "string", "");
+
+    itemType = jsonget(lineJSON, "_part_custom_field23", "string", "");
+    businessLine_c = jsonget(lineJSON, "businessLine_c", "string", "");
+    part_custom_field289 = jsonget(lineJSON, "_part_custom_field289", "string", "");
+    part_custom_field317 = jsonget(lineJSON, "_part_custom_field317", "string", "");
+    part_custom_field282 = jsonget(lineJSON, "_part_custom_field282", "string", "");
+    part_custom_field284 = jsonget(lineJSON, "_part_custom_field284", "string", "");
+    unitNetPrice_l = jsonget(lineJSON, "unitNetPrice_l", "float", 0.0);
+    part_custom_field7 = jsonget(lineJSON, "_part_custom_field7", "float", 0.0);
+    part_custom_field318 = jsonget(lineJSON, "_part_custom_field318", "string", "");
+    part_custom_field328 = jsonget(lineJSON, "_part_custom_field328", "string", "");
+    part_custom_field82 = jsonget(lineJSON, "_part_custom_field82", "float", 0.0);
+    part_custom_field25 = jsonget(lineJSON, "_part_custom_field25", "string", "");
+    sequence_number = jsonget(lineJSON, "_sequence_number", "integer", 0);
+    part_custom_field23 = jsonget(lineJSON, "_part_custom_field23", "string", "");
+    type_l = jsonget(lineJSON, "type_l", "string", "");
+    price_list_price_each = jsonget(lineJSON, "_price_list_price_each", "float", 0.0);
+    vendorUnitCost_l = jsonget(lineJSON, "vendorUnitCost_l", "float", 0.0);
+    sellableItem_l_c = jsonget(lineJSON, "sellableItem_l_c", "boolean", false);
+    isPickupAdded_c = jsonget(lineJSON, "isPickupAdded_c", "boolean", false);
+    equipmentComments_c = jsonget(lineJSON, "equipmentComments_c", "string", "");
+    vendorQuoteNumber_VLIG = jsonget(lineJSON, "vendorQuoteNumber_VLIG", "string", "");
+    vendorName_l = jsonget(lineJSON, "vendorName_l", "string", "");
+    part_custom_field27 = jsonget(lineJSON, "_part_custom_field27", "string", "");
+    discounttype_l = jsonget(lineJSON, "discounttype_l", "string", "");
+    discountAmountt_l = jsonget(lineJSON, "discountAmountt_l", "float", 0.0);
+    // print discounttype_l ; print discountAmountt_l  ;
+
+    price_configurable_price = jsonget(lineJSON, "_price_configurable_price", "float", 0.0);
+    line_bom_attributes = jsonget(lineJSON, "_line_bom_attributes", "string", "");
+    promoCode_l = jsonget(lineJSON, "promoCode_l", "string", "");
+    customSequenceForProposal_l = jsonget(lineJSON, "customSequenceForProposal_l", "integer", 0);
+    customSequenceSuffix_l = jsonget(lineJSON, "customSequenceSuffix_l", "integer", 0);
+    unitSRPBackend_l = jsonget(lineJSON, "unitSRPBackend_l", "float", 0.0);
+    includeInMS_l = jsonget(lineJSON, "includeInMS_l", "boolean", false);
+    line_bom_name = jsonget(lineJSON, "_line_bom_name", "string", "");
+    unitNetPriceITS_c = jsonget(lineJSON, "unitNetPriceITS_c", "float", 0.0);
+
+    extNetPriceITS_c = jsonget(lineJSON, "extNetPriceITS_c", "float", 0.0);
+    modelBaseUnitCode_c = jsonget(lineJSON, "modelBaseUnitCode_c", "string", "");
+    contracted_c = jsonget(lineJSON, "contracted_c", "string", "");
+    contractPrice_l = jsonget(lineJSON, "contractPrice_l", "float", 0.0);
+    part_custom_field18 = jsonget(lineJSON, "_part_custom_field18", "string", "");
+    linkedItem_l = jsonget(lineJSON, "linkedItem_l", "string", "");
+    locationSiteID_l = jsonget(lineJSON, "locationSiteID_l", "string", "");
+
+
+
+
+    // print "testing_data_table   : " + string(price_list_price_each);
+    SSM1 = getcurrenttimeinmillis();
+    runOldRule = False;
+    retJson = json();
+    outputJSON = json();
+    retStringDict = dict("string");
+    retIntegerDict = dict("integer");
+    retFloatDict = dict("float");
+    retBooleanDict = dict("boolean");
+    msInputDict = dict("string");
+    priceUpliftCategoryArray = string[];
+    CONTRACTED_UI_FLG = "";
+    upliftJson = json();
+    itsmrrtotaldealmethod = iTSMRRTotalDealPricingMethod_c;
+    gmpercemtage = gMPercentageITS_c;
+    monthlypayment = monthlyPaymentITS_c;
+    inputType = "PricingPortal"; // Added by Durga Mohan CHG0089895 this is to identify the pricing portal input while calling the Libraries
+    derivedFrom = "Before Formulas";
+    processGroup = "";
+    type = type_l;
+    defaultListPrice = price_list_price_each;
+    discounttype = discounttype_l;
+    discountValueLine = string(discountAmountt_l);
+    unitsellprice = 0.0;
+    discountAmt = 0.0;
+    extSellingPrice = 0.0;
+    promocode = promoCode_l;
+    unitnetsellprice = 0.0;
+    extnetsellprice = 0.0;
+    sysdate = datetostr(getdate(), "MM/dd/yyyy");
+    promoValueAmt = 0.0;
+    promoTypevalue = "";
+    promoValue = 0.0;
+    promoDescription = "";
+    priceUpliftCategory = part_custom_field25;
+    BOM_Item_Type = "";
+    modelname = "";
+    modelnameforpart = "";
+    FIPItemsFlag = "N";
+    FIPvalidFieldQty = 0;
+    termMonthinNumber = 0;
+    CostOfMoney = 0.0;
+    priceUpliftCategory = "";
+    priceUpliftCatPath = "";
+    CONTRACTED_FLG = true;
+    CONTRACTED_UI_FLG = "";
+    //  cashPrice = 0.0;
+    sMA = 0.0;
+    fplaFlag = "";
+    minGPPercentage = 0.0;
+    productFloor = 0.0;
+    sgaSegement = 0.0;
+    hardwareTargetPrice = 0.0;
+    priceUpliftCategoryStr = "";
+    processGroupRecord = "";
+    softCostValue = 0.0;
+    subtotal = 0.0;
+    TotalDealAmount = 0.0;
+    AirPercent_Total = 0.0;
+    RGCUnitSalesCost = 0.0;
+    RGCUnitNetPrice = 0.0;
+    monthlyPayment_c = 0.00;
+    extMonthlyPayment_c = 0.00;
+
+    termMonthinNumber = 0;
+    CostOfMoney = 0.0;
+    province = "";
+
+    modelname = "";
+    modelnameforpart = "";
+    FIPItemsFlag = "N";
+
+    unitSRP = 0.0;
+    unitStandardCost = 0.0;
+    initialSalesCost = 0.0;
+    finalSalesCost = 0.0;
+    contractedPrice = 0.0;
+
+    unitSellingPrice = 0.0;
+    unitNetPrice = 0.0;
+    extSellingPrice = 0.0;
+    extnetsellprice = 0.0;
+
+    cashPrice = 0.0;
+    sMA = 0.0;
+    minGPPercentage = 0.0;
+    productFloor = 0.0;
+    sgaSegement = 0.0;
+    hardwareTargetPrice = 0.0;
+    stretchPriceUplift = 0.0;
+    stretchPrice = 0.0;
+
+    roundUnitSRP = 0.0;
+    roundExtSRP = 0.0;
+    roundUnitCost = 0.0;
+    roundSalesCost = 0.0;
+    roundContractedPrice = 0.0;
+    roundHardwareTargetPrice = 0.0;
+    roundStretchPrice = 0.0;
+
+    roundunitNetPrice = 0.0;
+    roundunitSellingPrice = 0.0;
+    roundextSellingPrice = 0.0;
+    roundextNetPrice = 0.0;
+
+    marginPercentagesalescost = 0.0;
+    marginPercentagestdscost = 0.0;
+
+    CONTRACTED_FLG = false;
+
+    BaseUnitLine = "";
+    HWModelLine = "";
+    defaultListPrice = 0.0;
+    HWModelLineArr = string[];
+    CONTRACTED_FLG_Str = "";
+    EnvtFee_FLAG = false;
+
+    RsiTotalCondition = false;
+    discountApplied = false;
+    // code to run in After formulas
+    if (part_number <> "" AND (businessLine_c == "ITS" OR businessLine_c == "PS")) {
+        softCostValue = softCostValue + extNetPrice_l;
+    }
+    if (part_number <> "") {
+        subtotal = subtotal + extNetPrice_l;
+        //print extNetPrice_l;
+        TotalDealAmount = TotalDealAmount + extNetPrice_l;
+
+        if (part_custom_field317 <> "USED" OR type_l <> "REFINANCE") {
+            AirPercent_Total = AirPercent_Total + extNetPrice_l;
+        }
+    }
+    if (model_variable_name <> "") {
+        put(groupSeqDict, group_sequence_number, modelName_l_c);
+    }
+    //partNumber = part_number;
+    jsonput(ContractedFlagJson, document_number, true);
+    itemType = part_custom_field23; //Item Type from Part DB
+    itemTypeRecordSet = Recordset();
+    /*
+    if (itemType <> "" AND Not(isnull(itemType))) {
+        itemTypeRecordSet = bmq_l("select ItemType, ProcessGroup from RAC_ITEM_TYPE where ItemType = $itemType");
+    }*/
+    if (part_custom_field23 <> "") {
+        // itempath = "$." + part_custom_field23;
+        // print itempath ; print ItemTypeJson ;
+        // if (jsonpathcheck(ItemTypeJson, itempath)) {
+        processGroup = jsonget(ItemTypeJson, part_custom_field23, "string", "");
+        //}
+        //   print processGroup;
+        // print "***************************";
+    }
+    unitCostVal = 0.0;
+    baseContTargetVal = 0.0;
+    baseSellingPriceVal = 0.0;
+    if (findinarray(RGCPortfolioCategoryArray, part_custom_field282) > -1 AND findinarray(DSPValuesArray, part_custom_field284) > -1) {
+        RGCUnitSalesCost = RGCUnitSalesCost + unitSalesCost_l;
+        RGCUnitNetPrice = RGCUnitNetPrice + unitNetPrice_l;
+    }
+    if (parent_doc_number == "" AND line_bom_name <> "") {
+        local_parentNum = document_number;
+        local_modelName = line_bom_name;
+    }
+
+
+    if (model_variable_name <> "" AND (modelName_l_c == "Hardware")) {
+        discountApplied = false;
+        if (discounttype_l <> "") {
+            discountApplied = true;
+        }
+        line1Arr = split(group_sequence_number, ".");
+        jsonput(DiscountAppliedJson, line1Arr[0], discountApplied);
+        // append(HWModelArray, line1Arr[0]);
+    }
+    //CR100
+    rowLine = "";
+    lineNumber = group_sequence_number;
+    lineNumberArr = split(lineNumber, ".");
+    if (lineNumberArr[0] <> "" AND not(isnull(lineNumberArr[0]))) {
+        rowLine = lineNumberArr[0];
+    }
+    if ((findinarray(HWModelLineArr, rowLine) <> -1) AND discounttype_l <> "" AND pricelistRateFlag_c) {
+        discountApplied = true;
+    }
+    //CR100
+
+    if (part_number == "BASE UNIT") {
+        BaseUnitLineNumber = group_sequence_number;
+        lineNumberArr = split(BaseUnitLineNumber, ".");
+        if (lineNumberArr[0] <> "" AND not(isnull(lineNumberArr[0]))) {
+            BaseUnitLine = lineNumberArr[0];
+        }
+        append(BaseUnitArray, BaseUnitLine);
+    }
+    lineNumber = group_sequence_number;
+    lineNumberArr = split(lineNumber, ".");
+    if (lineNumberArr[0] <> "" AND not(isnull(lineNumberArr[0]))) {
+        HWModelLine = lineNumberArr[0];
+    }
+    if (part_number <> "") {
+        EDPCode = part_number;
+        val = EDPCode;
+        val2 = jsonget(RsiItemjson, val);
+        if (val2 <> "" AND not(isnull(val2)) AND val2 <> "null" AND modelName_l_c == "Hardware") {
+            RsiTotalCondition = true;
+        }
+        // print DiscountAppliedJson;
+        // print HWModelLine;
+        if (jsonpathcheck(DiscountAppliedJson, HWModelLine)) {
+            discountApplied = jsonget(DiscountAppliedJson, HWModelLine, "boolean");
+        }
+
+    }
+    businessLine_c = part_custom_field289;
+    // print part_number;
+    //   print sellableItem_l_c;
+    if (xaasFlag == false AND bundleNameXaaS_c == "" AND ((part_custom_field289 == "TRADITIONAL" AND model_variable_name == "" AND sellableItem_l_c) OR ((businessLine_c == "ITS" OR businessLine_c == "PS") AND model_variable_name == "") OR ((findinarray(HWModelLineArr, rowLine) <> -1) AND pricelistRateFlag_c)) AND part_number <> "EFEE" AND type_l <> "REFINANCE") {
+
+        // print " i am here";
+        partNumber = part_number;
+        vendorCost = vendorUnitCost_l;
+        if (racUserOrg_c == "RUS" OR racUserOrg_c == "") {
+            listPrice = part_custom_field7;
+        } elif (racUserOrg_c == "RCI" AND part_custom_field318 <> "" AND not(isnull(part_custom_field318))) {
+            listPrice = atof(part_custom_field318);
+        }
+
+        frozenCost = 0.0;
+        if ((racUserOrg_c == "RUS" OR racUserOrg_c == "") AND (part_custom_field328 <> "" AND not(isnull(part_custom_field328)))) {
+            frozenCost = atof(part_custom_field328);
+        } elif (racUserOrg_c == "RCI") {
+            frozenCost = part_custom_field82;
+        }
+        priceUpliftCategory = part_custom_field25;
+        BOM_Item_Type = "";
+
+        if (((businessLine_c == "TRADITIONAL" AND sellableItem_l_c == true) OR (businessLine_c == "PS" OR businessLine_c == "ITS") OR ((findinarray(HWModelLineArr, rowLine) <> -1) AND pricelistRateFlag_c)) AND isPickupAdded_c == false) {
+
+            processGroupPath = "$.TablePayload.ProcessGroupInfo." + part_number + ".Process Group";
+            if (jsonpathcheck(TableQueryJson, "processGroupPath")) {
+                processGroupRecord = jsonpathgetsingle(TableQueryJson, processGroupPath, "string");
+            }
+            unit = 0.0;
+            eachprice = "";
+            if (part_number <> "") {
+
+                if (jsonpathcheck(TableQueryJson, "$.TablePayload.PartInfo." + part_number + ".price")) {
+                    eachprice = jsonpathgetsingle(TableQueryJson, "$.TablePayload.PartInfo." + part_number + ".price", "string");
+                }
+                if (eachprice <> "") {
+                    unit = atof(eachprice);
+                }
+            }
+            if (jsonpathcheck(TableQueryJson, "$.TablePayload.PartInfo." + part_number + ".BOM_Item_Type")) {
+                BOM_Item_Type = jsonpathgetsingle(TableQueryJson, "$.TablePayload.PartInfo." + part_number + ".BOM_Item_Type");
+            }
+            if (model_name == "Equipment") {
+                modelname = "Equipment";
+            }
+            if (equipmentComments_c <> "") {
+                modelnameforpart = "Equipment";
+            }
+
+            if (part_number == "FIPSIBP5178" OR part_number == "FIPSIBP5179" OR part_number == "FIPSIBP5228" OR part_number == "FIPSIBP5229") {
+                FIPItemsFlag = "Y";
+            }
+
+            if (part_number <> "") {
+                priceUpliftCatPath = "$.TablePayload.UpliftInfo." + part_number + ".priceUpliftCategory";
+                priceUpliftCategory = jsonpathgetsingle(TableQueryJson, priceUpliftCatPath, "string");
+            }
+            rebatePercentage = 0.0;
+            fyCustomerStartType = fYStartCustomerType_t;
+            fyCustomerStartTypeException = fYStartCustomerTypeException_t;
+            fYStartProductionZBA = fYStartProductionZBA_t;
+            fyCustomerStartTypeVal = "N";
+            segmentLevel = segmentLevel_t;
+            Priceliststr = combinedPriceListMenu_c;
+            if (fyCustomerStartTypeException == "true") {
+                fyCustomerStartTypeVal = "Y";
+            } elif (fyCustomerStartTypeException == "false" AND fyCustomerStartType == "ZBA") {
+                fyCustomerStartTypeVal = "Y";
+            }
+            if (fyCustomerStartTypeException == "true") {
+                fyCustomerStartTypeException = "Y";
+            }
+            fYStartProductionZBA = "N";
+            if (fYStartProductionZBA_t == "true") {
+                fYStartProductionZBA = "Y";
+            }
+            if (segmentLevel_t == "None") {
+                segmentLevel = "";
+            }
+            if (combinedPriceListMenu_c == "") {
+                Priceliststr = combinedPriceListMenu_c;
+            }
+            if (businessLine_c == "TRADITIONAL" OR (rACUserOrg_c == "RUS" OR rACUserOrg_c == "RCI" OR rACUserOrg_c == "")) {
+                Priceliststr = combinedPriceListMenu_c;
+            }
+            rebatePercentagePath = "";
+            rebatePercentagePath = "$.TablePayload.HeaderInfo.PL_ATTRIBUTE_RebatePercentage";
+            if (jsonpathcheck(TableQueryJson, rebatePercentagePath)) {
+                if (isnumber(jsonpathgetsingle(TableQueryJson, rebatePercentagePath, "string"))) {
+                    rebatePercentage = jsonpathgetsingle(TableQueryJson, rebatePercentagePath, "float");
+                }
+            }
+            vpFlag = false;
+
+            if (((unitSRP_l >= 0.0 AND unitSalesCost_l >= 0.0 AND vendorQuoteNumber_VLIG == "" AND vendorName_l == "" AND (part_custom_field27 == "VP" OR part_custom_field27 == "YES")) OR (unitSRP_l >= 0.0 AND unitSalesCost_l >= 0.0 AND
+                    (part_custom_field27 == "VP" OR part_custom_field27 == "YES") AND (businessLine_c == "PS" OR businessLine_c == "ITS" OR businessLine_c == "TRADITIONAL") AND vendorQuoteNumber_VLIG == "")) AND
+                (discounttype_l <> "" AND (discountAmountt_l <> 0.0 or discountAmountt_l <> 0.01))) {
+                vpFlag = true;
+            }
+            //vpFlag = true;
+            codePresent = "false";
+            partNumberArray = string[];
+            defaultListPrice = price_list_price_each;
+            partNumber = part_number;
+            vendorCost = vendorUnitCost_l;
+            listPrice = 0.0;
+            //print "vendorCost"; print vendorCost ;
+            if (racUserOrg_c == "RUS" OR racUserOrg_c == "") {
+                listPrice = part_custom_field7;
+            } elif (racUserOrg_c == "RCI" AND part_custom_field318 <> "" AND not(isnull(part_custom_field318))) {
+                listPrice = atof(part_custom_field318);
+            }
+            frozenCost = 0.0;
+            if ((racUserOrg_c == "RUS" OR racUserOrg_c == "") AND (part_custom_field328 <> "" AND not(isnull(part_custom_field328)))) {
+                frozenCost = atof(part_custom_field328);
+            } elif (racUserOrg_c == "RCI") {
+                frozenCost = part_custom_field82;
+            }
+            priceUpliftCategory = part_custom_field25;
+            docNum = document_number;
+            stretchPriceUplift = 0.0;
+
+            if (jsonpathcheck(TableQueryJson, "$.TablePayload.PartInfo." + part_number + ".List_Price")) {
+                if (isnumber(jsonpathgetsingle(TableQueryJson, "$.TablePayload.PartInfo." + part_number + ".List_Price", "string"))) {
+                    listPrice = jsonpathgetsingle(TableQueryJson, "$.TablePayload.PartInfo." + part_number + ".List_Price", "float");
+                }
+            }
+            if (jsonpathcheck(TableQueryJson, "$.TablePayload.PartInfo." + part_number + ".Frozen_Cost")) {
+                if (isnumber(jsonpathgetsingle(TableQueryJson, "$.TablePayload.PartInfo." + part_number + ".Frozen_Cost", "string"))) {
+                    frozenCost = jsonpathgetsingle(TableQueryJson, "$.TablePayload.PartInfo." + part_number + ".Frozen_Cost", "float");
+                }
+            }
+            cashPricePath = "$.TablePayload.CashInfo." + part_number + ".priceListPrice";
+            sMApath = "$.TablePayload.CashInfo." + part_number + ".sMA";
+            fplaFlagpath = "$.TablePayload.CashInfo." + part_number + ".FPLA_Flag";
+            minGPPercentagePath = "$.TablePayload.UpliftInfo." + part_number + ".minGPPercentage";
+            productFloorPath = "$.TablePayload.UpliftInfo." + part_number + ".productFloor";
+            sgaSegementPath = "$.TablePayload.UpliftInfo." + part_number + ".sgaSegement";
+            hardwareTargetPricePath = "$.TablePayload.UpliftInfo." + part_number + ".hardwareTargetPrice";
+            stretchPriceUpliftPath = "$.TablePayload.StretchUpliftInfo." + part_number + ".StretchPriceUplift";
+
+            if (jsonpathcheck(TableQueryJson, cashPricePath) AND isnumber(jsonpathgetsingle(TableQueryJson, cashPricePath, "string"))) {
+                cashPrice = jsonpathgetsingle(TableQueryJson, cashPricePath, "float");
+            }
+            if (jsonpathcheck(TableQueryJson, sMApath) AND isnumber(jsonpathgetsingle(TableQueryJson, sMApath, "string"))) {
+                sMA = jsonpathgetsingle(TableQueryJson, sMApath, "float");
+            }
+            if (jsonpathcheck(TableQueryJson, fplaFlagpath)) {
+                fplaFlag = jsonpathgetsingle(TableQueryJson, fplaFlagpath, "string");
+            }
+            if (jsonpathcheck(TableQueryJson, minGPPercentagePath) AND isnumber(jsonpathgetsingle(TableQueryJson, minGPPercentagePath, "string"))) {
+                minGPPercentage = jsonpathgetsingle(TableQueryJson, minGPPercentagePath, "float");
+            }
+            if (jsonpathcheck(TableQueryJson, productFloorPath) AND isnumber(jsonpathgetsingle(TableQueryJson, productFloorPath, "string"))) {
+                productFloor = jsonpathgetsingle(TableQueryJson, productFloorPath, "float");
+            }
+            if (jsonpathcheck(TableQueryJson, sgaSegementPath) AND isnumber(jsonpathgetsingle(TableQueryJson, sgaSegementPath, "string"))) {
+                sgaSegement = jsonpathgetsingle(TableQueryJson, sgaSegementPath, "float");
+            }
+            if (jsonpathcheck(TableQueryJson, hardwareTargetPricePath) AND isnumber(jsonpathgetsingle(TableQueryJson, hardwareTargetPricePath, "string"))) {
+                hardwareTargetPrice = jsonpathgetsingle(TableQueryJson, hardwareTargetPricePath, "float");
+            }
+            if (jsonpathcheck(TableQueryJson, stretchPriceUpliftPath) AND isnumber(jsonpathgetsingle(TableQueryJson, stretchPriceUpliftPath, "string"))) {
+                stretchPriceUplift = jsonpathgetsingle(TableQueryJson, stretchPriceUpliftPath, "float");
+            }
+            if (jsonpathcheck(TableQueryJson, cashPricePath) AND isnumber(jsonpathgetsingle(TableQueryJson, cashPricePath, "string"))) {
+                CONTRACTED_FLG = true;
+            }
+            put(retFloatDict, "VendorCost", vendorCost); //  vendorCost = vendorUnitCost_l;
+            if (part_number <> "MAP-GENERIC") {
+                if (jsonpathcheck(TableQueryJson, cashPricePath) AND isnumber(jsonpathgetsingle(TableQueryJson, cashPricePath, "string"))) {
+                    cashPrice = jsonpathgetsingle(TableQueryJson, cashPricePath, "float");
+                    codePresent = "true";
+                }
+                defaultListPrice = unit;
+                /*   print "%%%%";
+                   print "@@@@@@@@@@@@@";
+                   print defaultListPrice;
+                   print unit;
+                   print "@@@@@@@@@@@@@";*/
+            }
+            vendorCost_c = vendorUnitCost_l;
+            vendoecost = unitCost_l;
+            if (vendorCost_c > 0) {
+                vendoecost = vendorCost_c;
+            }
+            if (modelnameforpart == "Equipment") {
+                defaultListPrice = price_configurable_price;
+                vendoecost = vendorCost_c;
+                listPrice = vendorCost_c;
+            }
+
+            if (line_bom_attributes <> "" AND line_bom_attributes <> "{}") {
+                bomjson = json(line_bom_attributes);
+                BOM_price = jsonpathgetsingle(bomjson, "$.EquipmentPricing.value");
+                //Chandra: added isnumber check for 34733
+                if (isnumber(BOM_price) AND BOM_price <> "null") {
+                    defaultListPrice = atof(BOM_price);
+                }
+            }
+            if (discounttype == "") {
+                discountValueLine = "0.0";
+                unitsellprice = defaultListPrice;
+                //print "defaultListPrice--"+ string(defaultListPrice );
+            } else {
+                print discounttype_l;
+                print discountAmountt_l;
+                print part_number;
+
+                if (discounttype == "Override") {
+                    discountAmt = atof(discountValueLine);
+                    unitsellprice = atof(discountValueLine);
+                } elif (discounttype == "Amount") {
+                    discountAmt = atof(discountValueline);
+                    unitsellprice = (defaultListPrice) - atof(discountValueline);
+                } elif (discounttype == "Percent") {
+                    discountAmt = ((atof(discountValueline) / 100) * defaultListPrice);
+                    unitsellprice = defaultListPrice - ((atof(discountValueline) / 100) * defaultListPrice);
+                } elif (discounttype == "Stretch") {
+                    unitsellprice = defaultListPrice;
+                }
+            }
+            extSellingPrice = (unitsellprice * price_quantity);
+            path = "$.Promotionjson[? (@.ItemNumber == '" + part_number + "') ]";
+            if (jsonpathcheck(Promotionjson1, path)) {
+                //   print "%%%%%%%%  Inside path item found %%%%%%%%%"; //print path ;
+
+                if (promocode == "") {
+                    unitnetsellprice = unitsellprice;
+                    extnetsellprice = unitnetsellprice * price_quantity;
+
+                }
+                startDate = jsonpathgetsingle(Promotionjson1, path + ".StartDate");
+                endDate = jsonpathgetsingle(Promotionjson1, path + ".EndDate");
+                if (sysdate >= startDate AND sysdate <= endDate) {
+
+                    promoValue = atof(jsonpathgetsingle(Promotionjson1, path + ".DiscountValue"));
+                    promoDescription = jsonpathgetsingle(Promotionjson1, path + ".Description");
+                    promotionTypeTable = jsonpathgetsingle(Promotionjson1, path + ".PromoType");
+                    promoTypevalue = promotionTypeTable;
+
+
+
+                    if (promotionTypeTable == "Amount") {
+                        promoValueAmt = promoValue;
+                        unitnetsellprice = unitsellprice - promoValue;
+                    }
+                    if (promotionTypeTable == "Percent") {
+                        promoValueAmt = (((promoValue) / 100) * unitsellprice);
+                        unitnetsellprice = unitsellprice - (((promoValue) / 100) * unitsellprice);
+                    }
+                    if (promotionTypeTable == "Override") {
+                        promoValueAmt = promoValue;
+                        unitnetsellprice = promoValue;
+                    }
+                    //Below roundoff added by Namrata for defect#34268 as part of 2.0
+                    unitnetsellprice = round(unitnetsellprice, 2);
+                    extnetsellprice = unitnetsellprice * price_quantity;
+                    //}
+                }
+            }
+
+            customSequenceForProposal = 0;
+            if (customSequenceForProposal_l > 0) {
+                customSequenceForProposal = customSequenceForProposal_l;
+            } elif (customSequenceSuffix_l > 0) {
+                customSequenceForProposal = customSequenceSuffix_l;
+            } else {
+                customSequenceForProposal = sequence_number;
+            }
+
+
+            //END 08_16_2023 PERFORMANCE_ACTIVITIES added by Vasundhara
+            if (derivedFrom == "Calcualtions on Transaction Line - Before Formulas" OR derivedFrom == "Before Formulas") {
+
+                unitSRP = defaultListPrice;
+
+                if (vendorQuoteNumber_VLIG <> "") {
+                    unitSRP = unitSRPBackend_l;
+
+                } elif (vpFlag) {
+
+                    unitSRP = unitSellingPrice;
+                }
+                if (unitSRPBackend_l > 0 AND modelnameforpart <> "Equipment") {
+                    unitSRP = unitSRPBackend_l;
+                }
+                if (FIPItemsFlag == "Y") {
+                    unitSRP = (defaultListPrice / 2) * FIPvalidFieldQty;
+                }
+                if (((businessLine_c == "ITS" OR businessLine_c == "PS") AND vendoecost > 0.0 AND modelnameforpart == "Equipment") OR (businessLine_c == "ITS" AND vendoecost > 0.0 AND part_custom_field27 <> "VP")) {
+                    unitStandardCost = vendoecost;
+                } else {
+                    if (vpFlag) {
+                        unitStandardCost = unitSellingPrice * (1 - minGPPercentage);
+                    } elif (vendorCost_c > 0.01) {
+                        unitStandardCost = vendorCost_c;
+                    } elif ((vendorCost_c == 0.0 OR vendorCost_c == 0.01) AND frozenCost > 0.01) {
+                        unitStandardCost = frozenCost;
+                        //print "frozenCost"; print frozenCost;
+                    } elif ((vendorCost_c == 0.0 OR vendorCost_c == 0.01 OR frozenCost == 0.0 OR frozenCost == 0.01 OR (substring(part_number, 4, len(part_number)) == "-DS" OR substring(part_number, 4, len(part_number)) == "-PS1") OR (businessLine_c == "PS" OR businessLine_c == "ITS")) AND listPrice > 0.01) //02_08_2023_Added Condition Vendor Cost =  = 0.0/0.01 for PS_Pricing by Vasundhara	{
+                    {
+                        unitStandardCost = listPrice;
+                    } else {
+                        unitStandardCost = unitSRP * (1 - minGPPercentage);
+                        //print "minGPPercentage--" + string(minGPPercentage);
+                    }
+                }
+
+                if (FIPItemsFlag == "Y") {
+                    unitStandardCost = (listPrice / 2) * FIPvalidFieldQty;
+                }
+                if (part_number == "FIPSBPS5174" OR part_number == "FIPSBPS5227") {
+                    unitStandardCost = listPrice;
+                }
+
+                if (lower(modelName_l_c) <> "hardware") {
+
+                    initialSalesCost = (unitStandardCost - sMA) * (1 + productFloor + sgaSegement);
+
+                } else {
+                    initialSalesCost = (unitStandardCost - sMA) * (1 + productFloor);
+
+                }
+
+                if (cashPrice > 0.0) {
+                    initialSalesCost = initialSalesCost + (cashPrice * (rebatePercentage / 100)); //print "%%34fr34f4rtgvrt4g%%" ;
+                    CONTRACTED_FLG = true;
+                    CONTRACTED_UI_FLG = "True";
+                    //  print initialSalesCost;
+                    //  print cashPrice;
+                    //   print rebatePercentage;
+
+                } elif (codePresent == "true" AND cashPrice == 0.0) { //09_06_2023 Added the elif condition for PS_Pricing by Vasundhara PS_Pricing
+                    initialSalesCost = 0.0;
+                    CONTRACTED_FLG = false;
+                    CONTRACTED_UI_FLG = "False";
+
+                } else {
+
+                    initialSalesCost = initialSalesCost + (initialSalesCost * (rebatePercentage / 100));
+                    //print "rebatePercentage"; print rebatePercentage; print initialSalesCost;
+                    CONTRACTED_FLG = false;
+                    CONTRACTED_UI_FLG = "False";
+
+                }
+                finalSalesCost = 0.0;
+                if (unitSRP <> 0.0 AND initialSalesCost <> 0.0) {
+                    salesCostArray = float[] {
+                        unitSRP,
+                        initialSalesCost
+                    };
+                    //print 	"salesCostArray "; print salesCostArray ; 
+                    finalSalesCost = min(salesCostArray);
+                } elif (unitSRP == 0.0 AND initialSalesCost <> 0.0) {
+                    finalSalesCost = initialSalesCost;
+                } elif (unitSRP <> 0.0 AND initialSalesCost == 0.0 AND codePresent <> "true") {
+                    finalSalesCost = unitSRP;
+
+                }
+                //END - Derivation of Unit Sales Cost//
+                //START - Derivation of Unit Contracted Price//
+                if ((businessLine_c == "ITS" AND modelnameforpart == "Equipment") OR (businessLine_c == "ITS" AND part_custom_field27 == "VP")) {
+                    contractedPrice = unitSRP;
+                } else {
+                    contractedPrice = finalSalesCost * (1 + hardwareTargetPrice);
+
+                    if (contractedPrice > unitSRP) {
+                        contractedPrice = unitSRP;
+                    }
+                }
+                if (codePresent == "true") {
+                    contractedPrice = cashPrice;
+
+                    unitSellingPrice = contractedPrice;
+                    extSellingPrice = price_quantity * unitSellingPrice;
+                    unitNetPrice = unitSellingPrice;
+                    extnetsellprice = unitNetPrice * price_quantity;
+                }
+                if (businessLine_c == "ITS" OR businessLine_c == "PS" OR businessLine_c == "TRADITIONAL") {
+                    if (unitSRP <> 0.0 AND contractedPrice <> 0.0) {
+                        contractedPriceArray = float[] {
+
+                            unitSRP,
+                            contractedPrice
+                        };
+                        contractedPrice = min(contractedPriceArray);
+
+                        unitSellingPrice = contractedPrice;
+                        extSellingPrice = price_quantity * unitSellingPrice;
+                        unitNetPrice = unitSellingPrice;
+                        extnetsellprice = unitNetPrice * price_quantity;
+                    } elif (unitSRP <> 0.0 AND contractedPrice == 0.0 AND codePresent <> "true") {
+                        contractedPrice = unitSRP;
+                        unitSellingPrice = contractedPrice;
+                        extSellingPrice = price_quantity * unitSellingPrice;
+                        unitNetPrice = unitSellingPrice;
+                        extnetsellprice = unitNetPrice * price_quantity;
+                    }
+                }
+
+                if (businessLine_c == "PS" OR businessLine_c == "TRADITIONAL") {
+                    if (vendorQuoteNumber_VLIG <> "") {
+                        contractedPrice = unitSRP;
+
+                    } elif (unitSRP <> 0.0 AND contractedPrice <> 0.0 AND contractedPrice > unitSRP) {
+                        contractedPriceArray = float[] {
+
+                            unitSRP,
+                            contractedPrice
+                        };
+                        contractedPrice = min(contractedPriceArray);
+                    } elif (unitSRP <> 0.0 AND contractedPrice == 0.0 AND codePresent <> "true") {
+                        contractedPrice = unitSRP;
+                    }
+                    unitSellingPrice = contractedPrice;
+                    extSellingPrice = price_quantity * unitSellingPrice;
+                    unitNetPrice = unitSellingPrice;
+                    extnetsellprice = unitNetPrice * price_quantity;
+                }
+                stretchPrice = 0.0;
+                stretchPrice = contractedPrice * (1 + stretchPriceUplift);
+                roundStretchPrice = round(stretchPrice, 4);
+                if (roundStretchPrice > unitSRP) {
+                    roundStretchPrice = unitSRP;
+                }
+
+                // promotionjson = json();
+                //promotionjsonarray = jsonarray();
+
+                perfPassedPromoStr = "";
+                if (containskey(retStringDict, "perfPromoRowsForPartJson")) {
+                    perfPassedPromoStr = get(retStringDict, "perfPromoRowsForPartJson");
+                }
+                if (perfPassedPromoStr <> "") {
+                    perfPassedPromoJson = json(perfPassedPromoStr);
+                    promotionjsonarray = jsonget(perfPassedPromoJson, "rows", "jsonarray");
+                }
+                discounttype = discounttype_l;
+                discountValueLine = string(discountAmountt_l);
+                discountAmt = 0.0;
+                promocode = promoTypevalue;
+
+
+                promoValueAmt = 0.0;
+                promoTypevalue = "";
+                promoValue = 0.0;
+                promoDescription = "";
+                path = "$.Promotionjson[? (@.ItemNumber == '" + part_number + "') ]";
+                if (jsonpathcheck(Promotionjson1, path)) {
+                    // print "%%%%%%%%  Inside path item found %%%%%%%%%"; //print path ;
+                    startDate = jsonpathgetsingle(Promotionjson1, path + ".StartDate");
+                    endDate = jsonpathgetsingle(Promotionjson1, path + ".EndDate");
+                    if (sysdate >= startDate AND sysdate <= endDate) {
+                        promoValue = atof(jsonpathgetsingle(Promotionjson1, path + ".DiscountValue"));
+                        promoDescription = jsonpathgetsingle(Promotionjson1, path + ".Description");
+                        promotionTypeTable = jsonpathgetsingle(Promotionjson1, path + ".PromoType");
+                        if (promotionTypeTable == "Amount") {
+                            promoValueAmt = promoValue;
+                            unitNetPrice = unitSellingPrice - promoValue;
+                        }
+                        if (promotionTypeTable == "Percent") {
+                            promoValueAmt = (((promoValue) / 100) * unitSellingPrice);
+                            unitNetPrice = unitSellingPrice - (((promoValue) / 100) * unitSellingPrice);
+                        }
+                        if (promotionTypeTable == "Override") {
+                            promoValueAmt = promoValue;
+                            unitNetPrice = promoValue;
+                        }
+                        extnetsellprice = unitNetPrice * price_quantity;
+                    }
+                }
+                if (discounttype == "") {
+                    discountValueLine = "0.0";
+                    unitSellingPrice = contractedPrice;
+                }
+                if (discounttype == "Stretch") {
+                    discountValueLine = "0.0";
+                    unitSellingPrice = contractedPrice;
+                }
+                if (discounttype == "Override") {
+                    discountAmt = atof(discountValueLine);
+                    unitSellingPrice = atof(discountValueLine);
+                }
+                if (discounttype == "Amount") {
+                    discountAmt = atof(discountValueline);
+                    unitSellingPrice = (contractedPrice) - atof(discountValueline);
+                }
+                /*    print "discounttype:" + discounttype;
+                    print "discountValueline:" + discountValueline;
+                    print "contractedPrice:" + string(contractedPrice); */
+                //  print _part_number ;
+                if (discounttype == "Percent") {
+
+                    discountAmt = ((atof(discountValueline) / 100) * contractedPrice);
+                    unitSellingPrice = contractedPrice - ((atof(discountValueline) / 100) * contractedPrice);
+
+                }
+                extSellingPrice = (unitSellingPrice * price_quantity);
+                //     print discountAmt;
+                if (promocode == "") {
+
+                    //print "asxcfswdafdcacfvs"; //
+                    unitNetPrice = unitSellingPrice;
+                    extnetsellprice = unitNetPrice * price_quantity;
+                    if (containskey(retFloatDict, "monthlypayment")) {
+
+                        monthlypayment = get(retFloatDict, "monthlypayment");
+
+                    }
+                    if (containskey(retFloatDict, "gmpercemtage")) {
+
+                        gmpercemtage = get(retFloatDict, "gmpercemtage");
+
+                    }
+                    if (containskey(retStringDict, "itsmrrtotaldealmethod")) {
+
+                        itsmrrtotaldealmethod = get(retStringDict, "itsmrrtotaldealmethod");
+
+                    }
+                    //print "gmpercemtage";
+                    //print "itsmrrtotaldealmethod";
+                    //print "monthlypayment";
+                    if (itsmrrtotaldealmethod <> "" and (gmpercemtage <> 0.0 or monthlypayment <> 0.0)) {
+                        //print "itsmrrtotaldealmethod"; //
+                        unitNetPrice = unitNetPriceITS_c;
+                        extnetsellprice = extNetPriceITS_c;
+                    }
+                }
+                if (businessLine_c == "PS" AND includeInMS_l AND part_custom_field27 == "VP") { //CHG0093637
+                    unitNetPrice = unitSRP * CostOfMoney;
+                    extnetsellprice = unitNetPrice * price_quantity;
+                    unitSellingPrice = unitSRP * CostOfMoney;
+                    extSellingPrice = price_quantity * unitSellingPrice;
+                    //print "CostOfMoney"; print CostOfMoney ;
+                }
+
+                if (((chargeType_l == "One Time" AND businessLine_c == "PS" AND includeInMS_l) OR (businessLine_c == "PS" AND includeInMS_l AND part_custom_field27 == "VP")) AND CostOfMoney <> 0 AND termMonthinNumber <> 0) {
+                    unitSRP = unitSRP * CostOfMoney;
+                    //  print "$$$";
+                    unitStandardCost = unitStandardCost * CostOfMoney;
+                    finalSalesCost = finalSalesCost * CostOfMoney;
+                    contractedPrice = contractedPrice * CostOfMoney;
+                }
+                if (vendorQuoteNumber_VLIG <> "" AND (vendorCost_c == 0.0 OR vendorCost_c == 0.01)) {
+                    unitStandardCost = vendorCost_c;
+                }
+                roundUnitSRP = round(unitSRP, 4);
+                if (startswith(part_number, "FIPS")) {
+                    roundUnitSRP = round(unitSRP, 4);
+                }
+                extSRP = price_quantity * unitSRP;
+                roundExtSRP = round(extSRP, 2);
+
+                if (startswith(part_number, "FIPS")) {
+                    roundExtSRP = round(extSRP, 4);
+                }
+                roundUnitCost = round(unitStandardCost, 4);
+                if (startswith(part_number, "FIPS")) {
+                    roundUnitCost = round(unitStandardCost, 4);
+                }
+                roundSalesCost = round(finalSalesCost, 4);
+                if (startswith(part_number, "FIPS")) {
+                    roundSalesCost = round(finalSalesCost, 4);
+                }
+                roundContractedPrice = round(contractedPrice, 4);
+                if (startswith(part_number, "FIPS")) {
+                    roundContractedPrice = round(contractedPrice, 4);
+                }
+                roundHardwareTargetPrice = round(hardwareTargetPrice, 4);
+                if (startswith(part_number, "FIPS")) {
+                    roundHardwareTargetPrice = round(hardwareTargetPrice, 4);
+                }
+            }
+            inputType = "";
+            if (containskey(retStringDict, "inputType")) {
+                inputType = get(retStringDict, "inputType");
+            }
+            marginSalesCost = 0.0;
+            marginStandardCost = 0.0;
+            if (unitNetPrice <> 0.0) {
+                marginSalesCost = ((unitNetPrice - roundSalesCost) / unitNetPrice) * 100;
+                marginStandardCost = ((unitNetPrice - roundUnitCost) / unitNetPrice) * 100;
+            } else {
+                marginSalesCost = 0.0;
+                marginStandardCost = 0.0;
+            }
+            //   print "unitNetPrice :" + String(unitNetPrice);
+            roundunitNetPrice = round(unitNetPrice, 2);
+            roundunitSellingPrice = round(unitSellingPrice, 2);
+            roundextSellingPrice = round(extSellingPrice, 2);
+            roundextNetPrice = round(extnetsellprice, 2);
+
+            //  print part_number;
+            SellingPrice = 0.0;
+            HWPriceJSON = json();
+            if (acquisitionType_t == "Lease") {
+                CONTRACTED_FLG = false;
+                MonthlyLeasePayment = 0.0;
+                unitNetPrice = 0.0;
+                extNetPrice = 0.0;
+                LeasePaymentDeferralFactor = 0.0;
+                waiveLeaseRatefactor = 0.0;
+                LateFee_LeasePayment_Uplift = 0.0;
+                PropertyTaxUplift = 0.0;
+                LeaseRate = 0.0;
+                contractSellingPrice = 0.0;
+                inputStringDict = dict("string");
+                inputIntegerDict = dict("integer");
+                inputFloatDict = dict("float");
+                inputBooleanDict = dict("boolean");
+                leaseRate_c = 0.0;
+                // roundunitNetPrice = 0.0;
+                if (racUserOrg_c <> "RCI") {
+                    if (propertyTaxIncluded_c) {
+                        TaxUpliftPath = "$.TablePayload.HeaderInfo.Property_Tax_Uplift";
+                        if (jsonpathcheck(TableQueryJson, TaxUpliftPath)) {
+                            PropertyTaxUplift = jsonpathgetsingle(TableQueryJson, TaxUpliftPath, "float");
+                        }
+                    }
+                    WaiveLate_Fee_FactorPath = "$.TablePayload.HeaderInfo.WaiveLate_Fee_Factor";
+                    if (jsonpathcheck(TableQueryJson, WaiveLate_Fee_FactorPath)) {
+                        waiveLeaseRatefactor = jsonpathgetsingle(TableQueryJson, WaiveLate_Fee_FactorPath, "float");
+                    }
+
+                    Lease_Payment_Deferral_FactorPath = "$.TablePayload.HeaderInfo.Lease_Payment_Deferral_Factor";
+                    if (jsonpathcheck(TableQueryJson, Lease_Payment_Deferral_FactorPath)) {
+                        LeasePaymentDeferralFactor = jsonpathgetsingle(TableQueryJson, Lease_Payment_Deferral_FactorPath, "float");
+                    }
+                    WaiveLateFeeUplift = 0.0;
+                    if (waiveLateFee_c) {
+                        WaiveLateFeeUplift = (1 + (1 * (waiveLeaseRatefactor / 100)));
+                    }
+                    LateFee_LeasePayment_Uplift = (WaiveLateFeeUplift + (WaiveLateFeeUplift * (LeasePaymentDeferralFactor / 100)));
+                }
+                modelBaseUnitCode = modelBaseUnitCode_c;
+                if (isnumber(jsonpathgetsingle(TableQueryJson, "$.TablePayload.LeaseInfo." + part_number + ".MonthlyLeasePayment", "string"))) {
+                    MonthlyLeasePayment = jsonpathgetsingle(TableQueryJson, "$.TablePayload.LeaseInfo." + part_number + ".MonthlyLeasePayment", "float");
+                    if (MonthlyLeasePayment > 0.0) {
+                        CONTRACTED_FLG = true;
+                    } else {
+                        CONTRACTED_FLG = false;
+                    }
+                }
+                if (CONTRACTED_FLG == true OR CONTRACTED_FLG == false) {
+
+                    if (discountApplied == false) {
+                        if (jsonpathcheck(TableQueryJson, "$.TablePayload.CashInfo." + part_number + ".LeaseBasisPrice")) {
+                            if (isnumber(jsonpathgetsingle(TableQueryJson, "$.TablePayload.CashInfo." + part_number + ".LeaseBasisPrice", "string"))) {
+                                contractSellingPrice = jsonpathgetsingle(TableQueryJson, "$.TablePayload.CashInfo." + part_number + ".LeaseBasisPrice", "float");
+                                CONTRACTED_UI_FLG = "True";
+                            }
+                        } elif (contractSellingPrice == 0.0) {
+                            if (isnumber(jsonpathgetsingle(TableQueryJson, "$.TablePayload.CashInfo." + part_number + ".priceListPrice", "string"))) {
+                                contractSellingPrice = jsonpathgetsingle(TableQueryJson, "$.TablePayload.CashInfo." + part_number + ".priceListPrice", "float");
+                                CONTRACTED_UI_FLG = "True";
+                            } else {
+                                CONTRACTED_UI_FLG = "False";
+                            }
+                        } else {
+                            CONTRACTED_UI_FLG = "False";
+                        }
+                    } elif (discountApplied == true) {
+                        //  print 1026;
+                        //  print part_number;
+                        contractSellingPrice = unitNetPrice_l;
+                        if (contracted_c == "Contract") {
+                            CONTRACTED_UI_FLG = "True";
+                        } elif (contracted_c == "Target") {
+                            CONTRACTED_UI_FLG = "False";
+                        }
+
+                    }
+                }
+                //print "MonthlyLeasePayment*---"+string(MonthlyLeasePayment);
+                if (contractSellingPrice > 0) {
+                    if ((BOM_Item_Type == "Standard" AND businessLine_c == "TRADITIONAL") OR (businessLine_c == "PS" OR businessLine_c == "ITS")) {
+                        LeaseRate = MonthlyLeasePayment / contractSellingPrice;
+                        //   print contractSellingPrice;
+                        // print LeaseRate;
+                        // print MonthlyLeasePayment;
+                        LeaseRate = round(LeaseRate, 5);
+                        // print 1064;
+                        // print LeaseRate;
+                    }
+                    if (leaseTypeList_c == "OPERATING RENTAL" OR pricelistRateFlag_c) {
+                        LeaseRate = 0;
+                        CONTRACTED_FLG = false;
+                    }
+                    //print "LeaseRAte--"+ string(LeaseRate);
+                }
+                if (LeaseRate > 0) {
+                    leaseRate_c = LeaseRate;
+                    if (PropertyTaxUplift > 0.0) {
+                        leaseRate_c = (LeaseRate + PropertyTaxUplift);
+                    }
+                    if (LateFee_LeasePayment_Uplift > 0.0) {
+                        leaseRate_c = leaseRate_c * (LateFee_LeasePayment_Uplift);
+                    }
+                }
+
+                CashJson = json();
+                priceQuantity_c = price_quantity;
+
+                /*print "CONTRACTED_UI_FLG"; print CONTRACTED_UI_FLG;
+                print "PropertyTaxUplift--"+ string(PropertyTaxUplift);
+                print "LateFee_LeasePayment_Uplift--" + string(LateFee_LeasePayment_Uplift);
+                print "leaseRate_c--"+ string(leaseRate_c)  ;*/
+                // if (jsonpathcheck(outputJSON, "$.unitNetPrice_l")) {
+                //SellingPrice = jsonpathgetsingle(outputJSON, "$.unitNetPrice_l", "float");
+                // print 1110;
+                // print part_number;
+                // print roundunitNetPrice;
+                //  }
+                if ((BOM_Item_Type == "Standard" AND businessLine_c == "TRADITIONAL") OR (businessLine_c == "ITS" OR businessLine_c == "PS") OR ((findinarray(HWModelLineArr, rowLine) <> -1) AND pricelistRateFlag_c)) //CR100 - Added to consider all the items under hardware
+                {
+                    if (discountApplied == false) {
+                        monthlyPayment_c = leaseRate_c * roundunitNetPrice;
+                    } elif (discountApplied == true AND ActionTrigger == "After Formulas") {
+                        monthlyPayment_c = leaseRate_c * unitNetPrice_l;
+                    }
+                    unitLeasePaymentLine_c = monthlyPayment_c;
+                    leasePayment_c = monthlyPayment_c * priceQuantity_c;
+                    if (leaseBillingFrequency_c == "Quarterly") {
+                        monthlyPayment_c = (monthlyPayment_c / 3);
+                    }
+                    if (leaseBillingFrequency_c == "Semi-Annually") {
+                        monthlyPayment_c = (monthlyPayment_c / 6);
+                    }
+                    if (leaseBillingFrequency_c == "Annually") {
+                        monthlyPayment_c = (monthlyPayment_c / 12);
+                    }
+                    //Below roundoff added by Namrata for defect#34268 as part of 2.0
+                    monthlyPayment_c = round(monthlyPayment_c, 2);
+                    extMonthlyPayment_c = monthlyPayment_c * priceQuantity_c;
+                    //print "monthlyPayment_c ***"+ string(monthlyPayment_c) ;
+                }
+
+                //print "BOM_Item_Type"; print BOM_Item_Type;
+                if ((BOM_Item_Type <> "Standard" AND businessLine_c == "TRADITIONAL")) {
+                    leaseRate_c = 0.0;
+                    CONTRACTED_UI_FLG = "";
+                    monthlyPayment_c = 0.0;
+                    extMonthlyPayment_c = 0.0;
+                }
+                roundextNetPrice = (roundunitNetPrice * priceQuantity_c);
+            }
+            // addv here 
+
+            /*      print "roundunitNetPrice :" + string(roundunitNetPrice);
+                  print " roundSalesCost  : " + string(roundSalesCost); */
+            if (roundunitNetPrice > 0) {
+                if (businessLine_c == "TRADITIONAL") {
+                    HWItemFound = true;
+                }
+                marginPercentagesalescost = ((roundunitNetPrice - roundSalesCost) / roundunitNetPrice) * 100;
+            }
+            if (roundunitNetPrice > 0) {
+                marginPercentagestdscost = ((roundunitNetPrice - roundUnitCost) / roundunitNetPrice) * 100;
+            }
+
+
+            if (RsiTotalCondition == false) {
+                //converted statements to setAttribute value to resolve double save issue with pricing portal call
+                result = result + document_number + "~unitSRP_l~" + string(roundUnitSRP) + "|";
+                result = result + document_number + "~extSRP_l~" + string(roundExtSRP) + "|";
+
+                //converted to setAttributeValue statements after seeing issue in attribute setting in Before Formulas
+                // setattributevalue(document_number, "unitSRP_l", roundUnitSRP);
+                // setattributevalue(document_number, "extSRP_l", roundExtSRP);
+
+                jsonput(lineJSON, "unitSRP_l", roundUnitSRP);
+                jsonput(lineJSON, "extSRP_l", roundExtSRP);
+                jsonput(lineJSON, "unitCost_l", roundUnitCost);
+                jsonput(lineJSON, "unitSalesCost_l", roundSalesCost);
+                jsonput(lineJSON, "contractedUnitPrice_l", roundContractedPrice);
+                jsonput(lineJSON, "contractPrice_l", roundContractedPrice);
+                jsonput(lineJSON, "targetPrice_l", roundHardwareTargetPrice);
+                jsonput(lineJSON, "stretchPriceCurrency_c", roundStretchPrice);
+
+
+
+                result = result + document_number + "~unitCost_l~" + string(roundUnitCost) + "|";
+                result = result + document_number + "~unitSalesCost_l~" + string(roundSalesCost) + "|";
+                result = result + document_number + "~contractedUnitPrice_l~" + string(roundContractedPrice) + "|";
+                result = result + document_number + "~contractPrice_l~" + string(roundContractedPrice) + "|";
+                result = result + document_number + "~targetPrice_l~" + string(roundHardwareTargetPrice) + "|";
+                result = result + document_number + "~stretchPriceCurrency_c~" + string(roundStretchPrice) + "|";
+                if (RsiTotalCondition == false AND ((discounttype_l == "" AND businessLine_c <> "TRADITIONAL") OR ((discountApplied == false OR (discountApplied == true AND ActionTrigger == "Before Formulas")) AND model_name == "" AND businessLine_c == "TRADITIONAL"))) {
+                    result = result + document_number + "~marginPercentagesalescost_l~" + string(marginPercentagesalescost) + "|";
+                    result = result + document_number + "~marginPercentagestdscost_l~" + string(marginPercentagestdscost) + "|";
+
+                    jsonput(lineJSON, "marginPercentagesalescost_l", marginPercentagesalescost);
+                    jsonput(lineJSON, "marginPercentagestdscost_l", marginPercentagestdscost);
+                }
+                //CR100
+                if (RsiTotalCondition == false AND ((discounttype_l == "" AND businessLine_c <> "TRADITIONAL") OR (discounttype_l <> "" AND businessLine_c <> "TRADITIONAL" AND pricelistRateFlag_c) OR ((discountApplied == false OR (discountApplied == true AND ActionTrigger == "Before Formulas")) AND model_name == "" AND businessLine_c == "TRADITIONAL"))) {
+                    // print 1366;
+                    // print part_number;
+                    // print roundunitSellingPrice;
+                    result = result + document_number + "~unitSellingPrice_l~" + string(roundunitSellingPrice) + "|";
+                    result = result + document_number + "~extSellingPrice_l~" + string(roundextNetPrice) + "|";
+                    result = result + document_number + "~unitNetPrice_l~" + string(roundunitNetPrice) + "|";
+                    result = result + document_number + "~extNetPrice_l~" + string(roundextNetPrice) + "|";
+
+
+                    jsonput(lineJSON, "unitSellingPrice_l", roundunitSellingPrice);
+                    jsonput(lineJSON, "extSellingPrice_l", roundextNetPrice);
+                    jsonput(lineJSON, "unitNetPrice_l", roundunitNetPrice);
+                    jsonput(lineJSON, "extNetPrice_l", roundextNetPrice);
+
+
+
+                    //converted to setAttributeValue statements after seeing issue in attribute setting in Before Formulas
+
+
+                    // setattributevalue(document_number, "unitNetPrice_l", roundunitNetPrice);
+                    // setattributevalue(document_number, "extNetPrice_l", roundextNetPrice);
+                    // setattributevalue(document_number, "unitSellingPrice_l", roundunitSellingPrice);
+                    // setattributevalue(document_number, "extSellingPrice_l", roundextNetPrice);
+                }
+                // print "roundunitNetPrice";print roundunitNetPrice; 
+                if (acquisitionType_t == "Lease" AND CONTRACTED_FLG == true) {
+                    if (sellableItem_l_c AND RsiTotalCondition == false AND part_custom_field18 <> "OKS-SUBSCRIPTION-STANDALONE" AND chargeType_l <> "Recurring") {
+                        result = result + document_number + "~extMonthlyPayment_c~" + string(extMonthlyPayment_c) + "|";
+                        result = result + document_number + "~monthlyPayment_c~" + string(monthlyPayment_c) + "|";
+                        result = result + document_number + "~leaseRate_c~" + string(leaseRate_c) + "|";
+                        result = result + document_number + "~leasePayment_c~" + string(leasePayment_c) + "|";
+                        result = result + document_number + "~unitLeasePaymentLine_c~" + string(unitLeasePaymentLine_c) + "|";
+
+                        jsonput(lineJSON, "extMonthlyPayment_c", extMonthlyPayment_c);
+                        jsonput(lineJSON, "monthlyPayment_c", monthlyPayment_c);
+                        jsonput(lineJSON, "leaseRate_c", leaseRate_c);
+                        jsonput(lineJSON, "leasePayment_c", leasePayment_c);
+                        jsonput(lineJSON, "unitLeasePaymentLine_c", unitLeasePaymentLine_c);
+
+                        //result = result + document_number + "~contractLeasePayment_c~" + string(MonthlyLeasePayment) + "|";
+                    }
+                }
+                if (CONTRACTED_UI_FLG == "True") {
+                    CONTRACTED_FLG_Str = "Contract";
+                } elif (CONTRACTED_UI_FLG == "False") {
+                    CONTRACTED_FLG_Str = "Target";
+                } else {
+                    CONTRACTED_FLG_Str = "";
+                }
+                if (sellableItem_l_c) {
+                    // setAttributeValue(document_number, "contracted_c", CONTRACTED_FLG_Str);
+                    //added for setting Price Type for the Model Line
+
+                    jsonput(lineJSON, "contracted_c", CONTRACTED_FLG_Str);
+
+                    if (part_number == "BASE UNIT") {
+                        jsonput(HWLineIdJson, HWModelLine + "+" + "contracted_c", CONTRACTED_FLG_Str);
+                    }
+
+                }
+                if (findinarray(HWModelLineArr, HWModelLine) == -1) {
+                    append(HWModelLineArr, HWModelLine);
+                }
+                // HW , BASEUNIT  are removed   
+
+                //END_added by Namrata as part of 2.0 for Hardware Pricing
+                // START_desc _added by Namrata for ENVT FEE 2.0
+                if (rACUserOrg_c == "RCI" AND part_number <> "") {
+                    if (EnvtFee_FLAG) {
+                        if (part_number <> "" AND linkedItem_l <> "") {
+                            append(linkedLineArr, linkedItem_l);
+                        }
+                        EHF_CHARGE = "";
+                        province = "";
+
+                        if (jsonarraysize(customerAccountResult_t) >= 1) {
+                            arraysizeAddress = range(jsonarraysize(customerAccountResult_t));
+                            for each in arraysizeAddress {
+                                LocationID = jsonget(json(jsonarrayget(customerAccountResult_t, each)), "locationSiteID_Result_t");
+                                if (LocationID == locationSiteID_l) {
+                                    province = jsonget(json(jsonarrayget(customerAccountResult_t, each)), "state_Result_t");
+                                }
+                            }
+                        }
+                        //print "State";print province;  
+                        // efee , its-mfp vritual          
+                        if (type_l <> "REFINANCE") {
+                            partNumber = part_number;
+                            // for Re in Records_RCI_ENVT_FEE {
+                            // EHF_CHARGE = get(Re, "EHF_CHARGE");
+                            if (jsonpathcheck(ReJSON, "$." + part_number + province + "EHF_CHARGE")) {
+                                EHF_CHARGE = jsonget(ReJSON, part_number + province + "EHF_CHARGE", "string", "");
+
+                                activeStartDateInNumber = 0;
+                                activeStartDateInStr = "";
+                                activeStartDate = getdate();
+                                activeStartDateStrArr = string[];
+                                // activeStartDatewithTimeStamp = get(Re, "ACTIVE_START_DATE");
+                                if (jsonpathcheck(ReJSON, "$." + part_number + province + "ACTIVE_START_DATE")) {
+                                    activeStartDatewithTimeStamp = jsonget(ReJSON, part_number + province + "ACTIVE_START_DATE", "string", "");
+                                }
+                                currentDatewithTimeStamp = getstrdate();
+                                //currentDate = getstrdate();
+                                currentDateStrArr = split(currentDatewithTimeStamp, " ");
+                                currentDate = strtojavadate(datetostr(strtojavadate(currentDateStrArr[0], "MM/dd/yyyy"), "MM-dd-yyyy"), "MM-dd-yyyy");
+
+                                activeStartDatewithTimeStamp = "";
+                                if (activeStartDatewithTimeStamp <> "") {
+                                    activeStartDateStrArr = split(activeStartDatewithTimeStamp, " ");
+                                    activeStartDateInStr = activeStartDateStrArr[0];
+                                    activeStartDate = strtojavadate(activeStartDateInStr, "MM-dd-yyyy");
+                                }
+                                // print activeStartDate ;print activeStartDateInStr ;
+                                activeEndDateInNumber = 0;
+                                activeEndDateInStr = "";
+                                activeEndDate = getdate();
+                                // activeEndDatewithTimeStamp = get(Re, "ACTIVE_END_DATE");
+                                activeEndDatewithTimeStamp = "";
+                                if (jsonpathcheck(ReJSON, "$." + part_number + province + "ACTIVE_END_DATE")) {
+                                    activeEndDatewithTimeStamp = jsonget(ReJSON, part_number + province + "ACTIVE_END_DATE", "string", "");
+                                }
+
+                                //print activeEndDatewithTimeStamp ;
+                                if (activeEndDatewithTimeStamp <> "") {
+
+                                    activeEndDateStrArr = split(activeEndDatewithTimeStamp, " ");
+                                    activeEndDateInStr = activeEndDateStrArr[0];
+                                    activeEndDate = strtojavadate(activeEndDateInStr, "MM-dd-yyyy");
+                                }
+                                compareStartAndCurrentDate = comparedates(activeStartDate, currentDate);
+                                compareCurrentAndEndDate = comparedates(currentDate, activeEndDate);
+                                pickThisRecord = false;
+                                if (activeStartDateInStr <> "" AND activeEndDateInStr <> "" AND (compareStartAndCurrentDate == -1 OR compareStartAndCurrentDate == 0) AND (compareCurrentAndEndDate == -1 OR compareCurrentAndEndDate == 0)) {
+                                    pickThisRecord = true;
+                                } elif (activeStartDateInStr <> "" AND activeEndDateInStr == "" AND (compareStartAndCurrentDate == -1 OR compareStartAndCurrentDate == 0)) {
+                                    pickThisRecord = true;
+                                }
+                                if (pickThisRecord) {
+                                    put(ENVT_FEE_Price, group_sequence_number, EHF_CHARGE);
+                                    if (EHF_CHARGE <> "" AND not(isnull(EHF_CHARGE))) {
+                                        put(ENVT_FEE_ExtPrice, group_sequence_number, string(atof(EHF_CHARGE) * price_quantity));
+                                    }
+                                    put(ENVT_FEE_Qty, group_sequence_number, string(price_quantity));
+                                    put(ENVT_FEE_Parent, document_number, "True");
+                                    append(ENVT_FEE_Item_Arr, group_sequence_number);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    jsonarrayappend(linesJArray, lineJSON);
+}
+jsonput(lineDetailsJSON, "lineDetails", linesJArray);
+
+leaseRateJSON = json();
+
+if (iSRGCPricingApprovalCompleted_c == false) {
+    ThresholdValue = 0.0;
+    if (RGCUnitNetPrice > 0.0) {
+        ThresholdValue = ((RGCUnitNetPrice - RGCUnitSalesCost) / RGCUnitNetPrice) * 100;
+    }
+    if (acquisitionType_t <> "Dealer") {
+        PricingQueryData = bmql("select * from RAC_Approval_Matrix");
+        for each in PricingQueryData {
+            minThreshold = get(each, "MinThreshold");
+            maxThreshold = get(each, "Threshold_MaxOrEqual");
+
+            if (ThresholdValue > atof(minThreshold) AND ThresholdValue <= atof(maxThreshold)) {
+                Message = get(each, "MessageText");
+                result = result + "1~warningMessageForRGCPricingThresholdTextArea_t_c~" + Message + "|" + "1~flagForRGCPricing_c~" + string(true) + "|" + "1~rGCGPSalesCostPercentage_c~" + string(ThresholdValue) + "|";
+                break;
+            }
+        }
+    }
+}
+if (Message == "") {
+    result = result + "1~warningMessageForRGCPricingThresholdTextArea_t_c~" + Message + "|" + "1~flagForRGCPricing_c~" + string(false) + "|" + "1~rGCGPSalesCostPercentage_c~" + string(ThresholdValue) + "|";
+    jsonput(headerJSON, "warningMessageForRGCPricingThresholdTextArea_t_c", Message);
+    jsonput(headerJSON, "flagForRGCPricing_c", false);
+    jsonput(headerJSON, "rGCGPSalesCostPercentage_c", ThresholdValue);
+
+
+}
+//TotalDealAmount = TotalDealAmount + line.extNetPrice_l;
+childItemPath = "$..lineDetails[?(@._part_number !=  '' )]";
+ExtnetPricePath = childItemPath + ".extNetPrice_l";
+if (jsonpathcheck(lineDetailsJSON, ExtnetPricePath)) {
+    TotalDealAmount = jsonpathgetsingle(lineDetailsJSON, ExtnetPricePath + ".sum()", "float", 0.0);
+}
+leaseType = leaseTypeList_c;
+CHART = "";
+chartarray = string[];
+softcostchart = "";
+NewHD = "";
+softCostCal = 0.00;
+CHART_DERIVATION_LEASE_ITS = recordset();
+TotalDealAmount = TotalDealAmount + TotalBuyoutAmount;
+ApprovedLeaseRate = false;
+selectionjsonarray = jsonarray();
+if (acquisitionType_t == "Lease") {
+    //print "HWModelLineArr";
+
+    print 17192;
+    print "After first line loop";
+    print HWLineIdJson;
+    Deal_Level_Rate = 0.0;
+    ITS_PS_LeaseRate = 0.0;
+    chartBFlag = false;
+    BlendingFlag = false;
+    Chart3_Rate = 0.0;
+    Chart1_Rate = 0.0;
+    if (acquisitionType_t == "Lease" AND TotalDealAmount > 0.0 AND rACUserOrg_c == "RUS") {
+        chartBFlag = true;
+        if (TotalDealAmount <= HWSRP) {
+            CHART = "Chart1";
+            LESAE_RATES = bmql("select * from RAC_RUS_LeaseRate where LEASE_TERM = $leaseTerm AND TOTAL_DOLLAR_FROM <= $TotalDealAmount AND TOTAL_DOLLAR_TROUGH > $TotalDealAmount AND CHART_NAME = $CHART");
+            //print LESAE_RATES ;
+            for Lease in LESAE_RATES {
+                leaseRateStr = get(Lease, "LEASE_RATE");
+                if (leaseRateStr <> "") {
+                    ITS_PS_LeaseRate = atof(leaseRateStr);
+                }
+            }
+        } elif (TotalDealAmount > HWSRP) {
+            BlendingFlag = true;
+            Chart3_Amount = TotalDealAmount - HWSRP;
+            LESAE_RATES = bmql("select * from RAC_RUS_LeaseRate where LEASE_TERM = $leaseTerm AND TOTAL_DOLLAR_FROM <= $TotalDealAmount AND TOTAL_DOLLAR_TROUGH > $TotalDealAmount AND CHART_NAME = 'Chart3'");
+
+            for Lease in LESAE_RATES {
+                leaseRateStr = get(Lease, "LEASE_RATE");
+                if (leaseRateStr <> "") {
+                    Chart3_Rate = atof(leaseRateStr);
+
+                }
+            }
+            Chart3_Amount = Chart3_Amount * Chart3_Rate;
+            //print Chart3_Amount ;
+            LESAE_RATES = bmql("select * from RAC_RUS_LeaseRate where LEASE_TERM = $leaseTerm AND TOTAL_DOLLAR_FROM <= $TotalDealAmount AND TOTAL_DOLLAR_TROUGH > $TotalDealAmount AND CHART_NAME = 'Chart1'");
+
+            for Lease in LESAE_RATES {
+                leaseRateStr = get(Lease, "LEASE_RATE");
+                if (leaseRateStr <> "") {
+                    Chart1_Rate = atof(leaseRateStr);
+                }
+            }
+            Chart1_Amount = HWSRP * (Chart1_Rate);
+            Deal_Level_Amount = Chart3_Amount + Chart1_Amount;
+            Deal_Level_Rate = Deal_Level_Amount / TotalDealAmount;
+        }
+    }
+    //print "Deal_Level_Rate "; print Deal_Level_Rate ; print ITS_PS_LeaseRate ;
+
+    ApprovedLeaseRate = false;
+    if (jsonarraysize(exceptionLeaseTransactionHistory_c) > 1) {
+        arraysize = range(jsonarraysize(exceptionLeaseTransactionHistory_c));
+        for each in arraysize {
+            status = jsonget(json(jsonarrayget(exceptionLeaseTransactionHistory_c, each)), "leasing_status_c");
+            //revisionNumber = jsonget(json(jsonarrayget(exceptionLeaseTransactionHistory_c, each)), "revisionNumber_c");
+            if (status == "Approved") {
+                print "status --" + status;
+                ApprovedLeaseRate = true;
+            } else {
+                ApprovedLeaseRate = false;
+
+            }
+        }
+    }
+    //print exceptionLeaseTransactionHistory_c;
+    SoftCost_Percentage = 0.0;
+    CHARTName = "";
+    leaseRateStr = "";
+    softCostRate = 0.0;
+    softCostValue = softCostValue + TotalBuyoutAmount;
+    //commented by Namrata for defect# 31991 in 2.0
+    //AirPercent_Total = AirPercent_Total + TotalBuyoutAmount;
+    if (AirPercent_Total > 0) {
+        softCostCal = softCostValue / AirPercent_Total;
+    }
+    //Added by Sheema - CR #66
+    SOFT_COST = bmql("select MEANING from RAC_Lookup where LOOKUP_TYPE = 'AIR_SOFT_PERC' AND ORG = $rACUserOrg_c");
+    for each in SOFT_COST {
+        SoftCost_Percentage = atof(get(each, "MEANING"));
+    }
+    //End of CR #66
+    //print softCostCal;print TotalDealAmount;
+    softCostCal = round(softCostCal, 2);
+    softCostCal = softCostCal * 100;
+    if (softCostCal > (SoftCost_Percentage)) { //Modified to consider the Value from Lookup - Sheema
+        CHARTName = "Chart2";
+    } elif (softCostCal <= (SoftCost_Percentage)) { //Modified to consider the Value from Lookup - Sheema
+        CHARTName = "Chart1";
+    }
+    //TotalDealAmount = 44340.2145308825;
+    print CHARTName;
+    LESAE_RATES = bmql("select * from RAC_RCI_LeaseRate where LEASE_TERM = $leaseTerm AND TOTAL_DOLLAR_FROM <= $TotalDealAmount AND TOTAL_DOLLAR_TROUGH > $TotalDealAmount AND CHART_NAME = $CHARTName");
+
+    for Lease in LESAE_RATES {
+        if (leaseBillingFrequency_c == "Quarterly") {
+            leaseRateStr = get(Lease, "LEASE_RATE_QUARTLY");
+        }
+        if (leaseBillingFrequency_c == "Monthly") {
+            leaseRateStr = get(Lease, "LEASE_RATE_MONTHLY");
+        }
+        if (leaseRateStr <> "") {
+            softCostRate = atof(leaseRateStr);
+            //print "LeaseRatefromChart";
+            //print softCostRate;
+        }
+    }
+    if (ApprovedLeaseRate) {
+        if (CHARTName == "Chart1") {
+            softCostRate = leasing_equipmentFMV_c;
+        } elif (CHARTName == "Chart2") {
+            softCostRate = leasing_BuyoutSoftCosts_c;
+        }
+    }
+    if (pricelistRateFlag_c) {
+        LESAE_RATES = bmql("select * from RAC_RCI_LeaseRate where LEASE_TERM = $leaseTerm AND TOTAL_DOLLAR_FROM <= $TotalDealAmount AND TOTAL_DOLLAR_TROUGH > $TotalDealAmount AND RECORD_NAME = $combinedPriceListMenu_c");
+        for Lease in LESAE_RATES {
+            if (leaseBillingFrequency_c == "Monthly") {
+                leaseRateStr = get(Lease, "LEASE_RATE_MONTHLY");
+            } elif (leaseBillingFrequency_c == "Quarterly") {
+                leaseRateStr = get(Lease, "LEASE_RATE_QUARTLY");
+            }
+            if (leaseRateStr <> "") {
+                PricelistLeaseRate = atof(leaseRateStr);
+            }
+        }
+        if (ApprovedLeaseRate) {
+            if (CHARTName == "Chart1") {
+                PricelistLeaseRate = leasing_equipmentFMV_c;
+            } elif (CHARTName == "Chart2") {
+                PricelistLeaseRate = leasing_BuyoutSoftCosts_c;
+            }
+        }
+    }
+    //print "TotalDealAmount --" + string(TotalDealAmount);
+
+
+    //print   "softCostRate"; print softCostRate ;
+
+    jsonput(headerJSON, "totalDealAmount_t_c", TotalDealAmount);
+    jsonput(headerJSON, "airPercentage_LeaseRate_c", softCostCal);
+    jsonput(headerJSON, "totalSoftCost_c", softCostValue);
+
+
+
+    RsiTotalCondition = false;
+
+    /*-------------------------------------------------------------------------------------------------------*/
+    ApprovedLeaseRate = false;
+    leaseRateJSON = json();
+    chartjson = json();
+    businessLine_c = ""; // need to lookup 
+    if (rACUserOrg_c <> "RCI") {
+        if (businessLine_c == "ITS" OR businessLine_c == "PS" OR businessLine_c == "TRADITIONAL") {
+            if (leaseTypeList_c == "LOAN") {
+                CHART = "Chart3";
+                chartarray = string[] {
+                    CHART
+                };
+            } else {
+                if ((businessLine_c == "ITS" OR businessLine_c == "PS") AND HWItemFound == false) { // HWotem can be defined as traditional
+
+                    CHART_DERIVATION_LEASE_ITS = bmql("select STANDALONE from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'ITS' AND ORG = 'RUS'");
+
+                } else {
+                    CHART_DERIVATION_PTO = bmql("select STANDALONE from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'PTO-BU'  AND VERSION = 'USED' AND ORG = 'RUS'");
+                    CHART_DERIVATION_FEE = bmql("select STANDALONE from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'FEES'  AND INSTALL_FEE = 'Yes' AND ORG = 'RUS'");
+                    CHART_DERIVATION_REFINANCE = bmql("select STANDALONE from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'REFINANCE' AND ORG = 'RUS'");
+                    CHART_DERIVATION_STANDALONE = bmql("select STANDALONE from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'Standalone Accessory' AND ORG = 'RUS'");
+                    CHART_DERIVATION_STANDALONE_BU = bmql("select STANDALONE from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'Standalone BU' AND ORG = 'RUS'");
+                    CHART_DERIVATION_LEASE_ITS = bmql("select STANDALONE from LEASE_CHRT_DERIVATON where LEASE_TYPE = $leaseType AND ORG = 'RUS'");
+
+                    //	CHART_DERIVATION = CHART_DERIVATION_LEASETYPE; // bmq_l("select * from LEASE_CHRT_DERIVATON where LEASE_TYPE = $leaseType AND ORG = 'RUS'");
+                }
+                if (businessLine_c == "TRADITIONAL") { // get using jsonget , utiple  add if  must add
+                    for data in CHART_DERIVATION_LEASE_ITS {
+                        CHART = get(data, "STANDALONE");
+                    }
+                }
+                chartarray = string[] {
+
+                    CHART,
+                    ""
+                };
+            }
+            LESAE_RATES = bmql("select * from RAC_RUS_LeaseRate where LEASE_TERM = $leaseTerm AND TOTAL_DOLLAR_FROM <= $TotalDealAmount AND TOTAL_DOLLAR_TROUGH > $TotalDealAmount  AND CHART_NAME in $chartarray");
+            //print TotalDealAmount ;
+            for Lease in LESAE_RATES {
+                leaseRateStr = get(Lease, "LEASE_RATE");
+
+                //   print leaseRateStr;
+                if (leaseRateStr <> "") {
+                    //	leaseRate = atof(leaseRateStr);
+
+                    if (get(Lease, "CHART_NAME") == CHART AND CHART <> "") {
+                        jsonput(leaseRateJSON, "TRADITIONAL", leaseRateStr);
+
+                    } else {
+                        jsonput(leaseRateJSON, "OTHER", leaseRateStr);
+                    }
+                }
+            }
+        }
+    } else {
+        finalchart = "";
+        if (leaseTypeList_c == "LOAN") {
+            //CHART = "Chart2";
+            chartarray = string[] {
+                "Chart2"
+            };
+            softcostchart = "Chart2";
+            // finalchart = "Chart2";
+        } else {
+            //CHART_DERIVATION_USED = bmql("select STANDALONE from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'Used'  AND ORG = 'RCI'");
+            CHART_DERIVATION_SOFT = bmql("select STANDALONE from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'Soft Cost' AND ORG = 'RCI' AND LEASE_TYPE = $leaseTypeList_c");
+
+            CHART_DERIVATION_NEWHD = bmql("select STANDALONE from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'New HW' AND ORG = 'RCI' AND LEASE_TYPE = $leaseTypeList_c");
+
+            CHART_DERIVATION_SOFT_NEWHD = bmql("select STANDALONE from LEASE_CHRT_DERIVATON where (PRODUCT_TYPE = 'New HW' or PRODUCT_TYPE = 'Soft Cost') AND ORG = 'RCI' AND LEASE_TYPE = $leaseTypeList_c");
+
+            for data in CHART_DERIVATION_SOFT_NEWHD {
+                PRODUCT_TYPE = get(data, "PRODUCT_TYPE");
+                CHART = get(data, "STANDALONE");
+                if (PRODUCT_TYPE == "Soft Cost") {
+                    jsonput(chartjson, "Soft_Cost", CHART);
+                    softcostchart = CHART;
+                } else {
+                    jsonput(chartjson, "New_HD", CHART);
+                    NewHD = CHART;
+                }
+            }
+            chartarray = string[] {
+                jsonget(chartjson, "Soft_Cost", "string", ""),
+                    jsonget(chartjson, "New_HD", "string", "")
+            };
+        }
+        // print "CHART--"+(CHART );0
+        if (softcostchart <> "Based on %Air" OR NewHD <> "Based on %Air") {
+            // print CHART; print "CHART";
+            LESAE_RATES = bmql("select * from RAC_RCI_LeaseRate where LEASE_TERM = $leaseTerm AND TOTAL_DOLLAR_FROM <= $TotalDealAmount AND TOTAL_DOLLAR_TROUGH > $TotalDealAmount AND CHART_NAME in $chartarray");
+            for Lease in LESAE_RATES {
+                if (leaseBillingFrequency_c == "Monthly") {
+                    leaseRateStr = get(Lease, "LEASE_RATE_MONTHLY");
+                } elif (leaseBillingFrequency_c == "Quarterly") {
+                    leaseRateStr = get(Lease, "LEASE_RATE_QUARTLY");
+                }
+                if (leaseRateStr <> "") {
+                    //leaseRate = atof(leaseRateStr);
+                    CHART_NAME = get(Lease, "CHART_NAME");
+                    if (CHART_NAME == softcostchart AND softcostchart <> "Based on %Air") {
+                        jsonput(leaseRateJSON, "Soft_Cost", leaseRateStr);
+                    } elif (NewHD <> "Based on %Air") {
+                        jsonput(leaseRateJSON, "New_HD", leaseRateStr);
+                    }
+                }
+            }
+        }
+    }
+
+
+    // 3rd tranaction loop performance  start
+
+
+
+    modelJsonPath = "$..lineDetails[?(@.model_product_line_name == 'Multifunction Color' && @.model_product_line_name === 'Multifunction B&W')]";
+
+    pricelistArr = string[];
+
+    if (jsonpathcheck(lineDetailsJSON, modelJsonPath)) {
+        pricelistArr = string[];
+        recordSet = bmql("select DISTINCT PriceListName from RAC_PRLIST_EDPCODE");
+        for each in recordSet {
+            pricelist = get(each, "PriceListName");
+            append(pricelistArr, pricelist);
+        }
+
+    }
+
+
+    // 3rd tranaction loop performance  End
+
+
+    count = 0;
+    HWModelLineArr = string[];
+    RSISellingPriceJson = json();
+    BaseUnitJson = json();
+    lineArray = jsonget(lineDetailsJSON, "lineDetails", "jsonarray", jsonarray());
+    linesJArray = jsonarray();
+    lineJSON = json();
+    for i in indices {
+        lineJSON = jsonarrayget(lineArray, i, "json");
+        parent_line_item = jsonget(lineJSON, "_parent_line_item", "string", "");
+        xaasFlag = false;
+        if (parent_line_item == "XaaS" OR parent_line_item == "HWaaS" OR parent_line_item == "RPAP" OR parent_line_item == "Ricoh Process AP") {
+            xaasFlag = true;
+            jsonarrayappend(linesJArray, lineJSON);
+            continue;
+        }
+        part_number = jsonget(lineJSON, "_part_number", "string", "");
+        group_sequence_number = jsonget(lineJSON, "_group_sequence_number", "string", "");
+        businessLine_c = jsonget(lineJSON, "businessLine_c", "string", "");
+        modelName_l_c = jsonget(lineJSON, "modelName_l_c", "string", "");
+        discounttype_l = jsonget(lineJSON, "discounttype_l", "string", "");
+        discountAmountt_l = jsonget(lineJSON, "discountAmountt_l", "float", 0.0);
+        isPickupAdded_c = jsonget(lineJSON, "isPickupAdded_c", "boolean", false);
+        itemIdentifier_c = jsonget(lineJSON, "itemIdentifier_c", "string", "");
+        document_Number = jsonget(lineJSON, "_document_number", "string", "");
+        part_custom_field18 = jsonget(lineJSON, "_part_custom_field18", "string", "");
+        sellableItem_l_c = jsonget(lineJSON, "sellableItem_l_c", "boolean", false);
+        type_l = jsonget(lineJSON, "type_l", "string", "");
+        chargeType_l = jsonget(lineJSON, "chargeType_l", "string", "");
+        parent_doc_number = jsonget(lineJSON, "_parent_doc_number", "string", "");
+        model_variable_name = jsonget(lineJSON, "_model_variable_name", "string", "");
+
+
+        //docNum = eachLine._document_number;
+        // print "$$$$$$$$$$$$$$$$$$$$$$$$$rgvbergerheryhj6retueq2r$$$$$$$$$$$$$$$$";
+        TSPartlineValue = "";
+        USED_FLG = false;
+        ISNTL_FEE_FLG = false;
+        CHART_DERIVATION = RecordSet();
+        CHART = "";
+        leaseRate = 0.0;
+        MonthlyPayment = 0.0;
+        unitSRP = 0.0;
+        extSRP = 0.0;
+        unitCost = 0.0;
+        unitSalesCost = 0.0;
+        contractedUnitPrice = 0.0;
+        ContractedPrice = 0.0;
+        targetPrice = 0.0;
+        unitNetPrice = 0.0;
+        extNetPrice = 0.0;
+        unitNetPrice = 0.0;
+        unitSellingPrice = 0.0;
+        extSellingPrice = 0.0;
+        contractLeasePayment = 0.0;
+        StretchPrice = 0.0;
+        MarginSalesCostPercent = 0.0;
+        itemSellingPrice = 0.0;
+        itemSalesCost = 0.0;
+        marginSalesCost = 0.0;
+        leaseRate = 0.0;
+        Chart3_Rate = 0.0;
+        Chart1_Rate = 0.0;
+        //BOM_Item_Type = "";
+        SoftCost_Flg = false;
+        docNum = document_number;
+        TSPartlineValue = "";
+        USED_FLG = false;
+        ISNTL_FEE_FLG = false;
+        Refinance_FlG = false;
+        settlement_Flg = false;
+        Standalone_Accessory_Flg = false;
+        Standalone_BU_Flg = false;
+        CHART_DERIVATION = RecordSet();
+        CHART = "";
+        leaseRate = 0.0;
+        MonthlyPayment = 0.0;
+        leasePayment = 0.0;
+        unitLeasePayment = 0.0;
+        RsiTotalCondition = false;
+        extMonthlyPayment = 0.0;
+        RsiItem = false;
+        discountApplied = false;
+        rowLine = "";
+        BaseUnitLine = "";
+        TSModelLine = "";
+        lineNum = group_sequence_number;
+        lineNumArr = split(lineNum, ".");
+        if (lineNumArr[0] <> "" AND not(isnull(lineNumArr[0]))) {
+            rowLine = lineNumArr[0];
+        }
+        //End of CR100
+        lineNumber = group_sequence_number;
+        lineNumberArr = split(lineNumber, ".");
+
+        if (lineNumberArr[0] <> "" AND not(isnull(lineNumberArr[0]))) {
+            HWModelLine = lineNumberArr[0];
+        }
+        if (itemIdentifier_c == "BASE UNIT") {
+            BaseUnitLineNumber = group_sequence_number;
+            lineNumberArr = split(BaseUnitLineNumber, ".");
+            if (lineNumberArr[0] <> "" AND not(isnull(lineNumberArr[0]))) {
+                BaseUnitLine = lineNumberArr[0];
+            }
+        }
+        if (jsonpathcheck(DiscountAppliedJson, lineNumberArr[0])) {
+            discountApplied = jsonget(DiscountAppliedJson, lineNumberArr[0], "boolean");
+            if ((businessLine_c == "ITS" OR businessLine_c == "PS") AND discounttype_l <> "") {
+                discountApplied = true;
+                print 2046;
+                print DiscountAppliedJson;
+            }
+        }
+        //CR100
+        elif ((findinarray(HWModelLineArr, rowLine) <> -1) AND discounttype_l <> "" AND pricelistRateFlag_c) {
+            discountApplied = true;
+        }
+
+        CONTRACTED_FLG = jsonget(ContractedFlagJson, document_number, "boolean");
+        if (part_number <> "") {
+            EDPCode = part_number;
+            val = EDPCode;
+            val2 = jsonget(RsiItemjson, val);
+            if (val2 <> "" AND not(isnull(val2)) AND val2 <> "null" AND modelName_l_c == "Hardware") {
+                RsiTotalCondition = true;
+            }
+            if (val2 <> "" AND not(isnull(val2)) AND val2 <> "null") {
+                RsiItem = true;
+            }
+        }
+        if (rACUserOrg_c == "RCI" AND EnvtFee_FLAG) {
+            EHF_CHARGE = "";
+            EHF_CHARGE_Float = 0;
+            if (part_number == "EFEE") {
+                if (ENVT_FEE_Item_Arr[count] <> "" AND NOT ISNULL(ENVT_FEE_Item_Arr[count])) {
+                    LinkedLine = ENVT_FEE_Item_Arr[count];
+                    qty = atoi(get(ENVT_FEE_Qty, LinkedLine));
+                    EHF_CHARGE_F = 0.0;
+                    EHF_CHARGE = get(ENVT_FEE_Price, LinkedLine);
+                    jsonput(lineJSON, "_price_quantity", qty);
+                    if (EHF_CHARGE <> "" AND not(isnull(EHF_CHARGE))) {
+                        EHF_CHARGE_F = atof(EHF_CHARGE);
+                    }
+                    jsonput(lineJSON, "extNetPrice_l", round(EHF_CHARGE_F, 2) * qty);
+                    jsonput(lineJSON, "extSellingPrice_l", round(EHF_CHARGE_F, 2) * qty);
+                    jsonput(lineJSON, "extSRP_l", EHF_CHARGE_F * qty);
+                    count = count + 1;
+                }
+            }
+        }
+        // CONTRACTED_FLG = jsonget(ContractedFlagJson , eachLine._document_number, "boolean") ;
+        if (acquisitionType_t == "Lease") {
+            if (acquisitionType_t == "Lease" AND TotalDealAmount > 0.0 AND rACUserOrg_c == "RUS" AND part_number <> "") {
+
+
+                leaseType = leaseTypeList_c;
+                if (Deal_Level_Rate <= 0.0) {
+                    if (businessLine_c == "ITS" OR businessLine_c == "PS" OR businessLine_c == "TRADITIONAL") {
+                        if ((businessLine_c == "ITS" OR businessLine_c == "PS") AND HWItemFound == false) {
+                            // = CHART_DERIVATION_LEASE_ITS; // bmq_l("select * from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'ITS' AND ORG = 'RUS'");
+                            leaseRate = jsonget(leaseRateJSON, "TRADITIONAL", "float", 0.00);
+
+                        } else {
+                            print " Hw lease ";
+
+                            /*
+                                                    if (USED_FLG) {
+                                                        CHART_DERIVATION = CHART_DERIVATION_PTO; // bmq_l("select * from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'PTO-BU'  AND VERSION = 'USED' AND ORG = 'RUS'");
+                                                    } elif (ISNTL_FEE_FLG) {
+                                                        CHART_DERIVATION = CHART_DERIVATION_FEE; // bmq_l("select * from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'FEES'  AND INSTALL_FEE = 'Yes' AND ORG = 'RUS'");
+                                                    } elif (Refinance_FLG) {
+                                                        CHART_DERIVATION = CHART_DERIVATION_REFINANCE; //bmq_l("select * from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'REFINANCE' AND ORG = 'RUS'");
+                                                    } elif (Standalone_Accessory_Flg) {
+                                                        CHART_DERIVATION = CHART_DERIVATION_STANDALONE; //bmq_l("select * from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'Standalone Accessory' AND ORG = 'RUS'");
+                                                    } elif (Standalone_BU_Flg) {
+                                                        CHART_DERIVATION = CHART_DERIVATION_STANDALONE_BU; // bmq_l("select * from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'Standalone BU' AND ORG = 'RUS'");
+                                                    } else {
+                                                        CHART_DERIVATION = CHART_DERIVATION_LEASETYPE; // bmq_l("select * from LEASE_CHRT_DERIVATON where LEASE_TYPE = $leaseType AND ORG = 'RUS'");
+                                                    }*/
+                        }
+                        //print CHART_DERIVATION ;
+                        leaseRate = jsonget(leaseRateJSON, "OTHER", "float", 0.00);
+
+                        if (businessLine_c == "TRADITIONAL" OR sizeofarray(chartarray) == 1) {
+                            leaseRate = jsonget(leaseRateJSON, "TRADITIONAL", "float", 0.00);
+                        }
+
+                        if (leaseTypeList_c == "LOAN") {
+                            leaseRate = jsonget(leaseRateJSON, "TRADITIONAL", "float", 0.00);
+                        }
+                    }
+                }
+                if (HWItemFound == true AND Deal_Level_Rate > 0.0) {
+                    leaseRate = Deal_Level_Rate;
+                }
+                if ((businessLine_c == "ITS" OR businessLine_c == "PS") AND HWItemFound == true AND ITS_PS_LeaseRate > 0.0) {
+                    leaseRate = ITS_PS_LeaseRate;
+                }
+
+            }
+            //print "rACUserOrg_c "; print rACUserOrg_c ;print "TotalDealAmoun"; print TotalDealAmount ;
+
+            if (acquisitionType_t == "Lease" AND TotalDealAmount > 0.0 AND rACUserOrg_c == "RCI" AND part_number <> "" AND (businessLine_c <> "TRADITIONAL" OR (businessLine_c == "TRADITIONAL" AND sellableItem_l_c) OR ((findinarray(HWModelLineArr, rowLine) <> -1) AND pricelistRateFlag_c))) { //Modified for CR100
+
+                leaseRateStr = "";
+                if ((businessLine_c == "ITS" OR businessLine_c == "PS") AND type_l <> "REFINANCE" AND businessLine_c <> "TRADITIONAL" AND leaseTypeList_c <> "LOAN") {
+                    SoftCost_Flg = true;
+                }
+                if (USED_FLG) {
+                    print "";
+                    //	CHART_DERIVATION = CHART_DERIVATION_USED; //bmq_l("select * from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'Used'  AND ORG = 'RCI'");
+                } elif (SoftCost_Flg) {
+                    CHART = softcostchart;
+                    leaseRate1 = jsonget(leaseRateJSON, "Soft_Cost", "float", 0.00);
+                } else {
+                    //	CHART_DERIVATION = CHART_DERIVATION_NEWHD; //bmq_l("select * from LEASE_CHRT_DERIVATON where PRODUCT_TYPE = 'New HW' AND ORG = 'RCI' AND LEASE_TYPE = $leaseTypeList_c");
+                    leaseRate1 = jsonget(leaseRateJSON, "New_HD", "float", 0.00);
+                    CHART = NewHD;
+                }
+                if (leaseTypeList_c == "LOAN") {
+                    CHART = "Chart2";
+                    leaseRate = jsonget(leaseRateJSON, "Soft_Cost", "float", 0.00);
+                }
+                if (pricelistRateFlag_c) {
+                    LeaseRate = PricelistLeaseRate;
+                } elif (CHART <> "Based on %Air") {
+                    // print CHART; print "CHART";
+                    leaseRate = leaseRate1;
+                    if (ApprovedLeaseRate) {
+                        if (CHART == "Chart1") {
+                            leaseRate = leasing_equipmentFMV_c;
+                        } elif (CHART == "Chart2") {
+                            leaseRate = leasing_BuyoutSoftCosts_c;
+                        }
+                    }
+                } else {
+
+                    leaseRate = softCostRate;
+                }
+            }
+            if (leaseRate > 0.0) {
+                jsonput(headerJSON, "softcostLeaseRate_c", leaseRate);
+            } else {
+                // setattributevalue(1, "softcostLeaseRate_c", 0.00);
+                jsonput(headerJSON, "softcostLeaseRate_c", "0.00");
+
+            }
+            if (CONTRACTED_FLG == false OR part_number == "EFEE" OR part_number == "HDSTANDARD" OR isPickupAdded_c == true) {
+                if (PropertyTax_Uplift > 0) {
+                    leaseRate = leaseRate + PropertyTax_Uplift;
+                }
+                if (LateFee_LeasePayment_Uplift > 0) {
+                    leaseRate = leaseRate * LateFee_LeasePayment_Uplift;
+                }
+                if (RsiTotalCondition == false) {
+                    itemSellingPrice = unitNetPrice_l;
+                } else {
+                    itemSellingPrice = jsonget(RSISellingPriceJson, document_number, "float");
+
+                }
+                // print "itemSellingPrice ";
+                // print itemSellingPrice;
+                // print ActionTrigger;
+                MonthlyPayment = itemSellingPrice * leaseRate;
+                unitLeasePayment = MonthlyPayment;
+                leasePayment = MonthlyPayment * price_quantity;
+
+                //print "MonthlyPayment--"+string(MonthlyPayment);
+                if (leaseBillingFrequency_c == "Quarterly") {
+                    MonthlyPayment = (MonthlyPayment / 3);
+                }
+                if (leaseBillingFrequency_c == "Semi-Annually") {
+                    MonthlyPayment = (MonthlyPayment / 6);
+                }
+                if (leaseBillingFrequency_c == "Annually") {
+                    MonthlyPayment = (MonthlyPayment / 12);
+                }
+                //added by Namrata defect 34268 in 2.0
+                MonthlyPayment = round(MonthlyPayment, 2);
+                extMonthlyPayment = MonthlyPayment * price_quantity;
+                //END_DESC added as part of CR-67 part of 2.0
+                print 2272;
+                print part_number;
+                print leaseRate;
+                print MonthlyPayment;
+                if (itemIdentifier_c == "BASE UNIT") {
+                    jsonput(BaseUnitJson, BaseUnitLine + "+" + "leaseRate_c", leaseRate);
+                }
+                if (RsiTotalCondition == false AND sellableItem_l_c AND part_custom_field18 <> "OKS-SUBSCRIPTION-STANDALONE" AND chargeType_l <> "Recurring" AND model_variable_name == "" AND ((parent_doc_number <> TSModelLine AND TSModelLine <> "") OR TSModelLine == "") //AND discountApplied =  = false
+                ) {
+                    print "Hell 2283";
+                    print part_number;
+
+                    jsonput(lineJSON, "monthlyPayment_c", monthlyPayment);
+                    jsonput(lineJSON, "extMonthlyPayment_c", extMonthlyPayment);
+
+                    jsonput(lineJSON, "leasePayment_c", leasePayment);
+                    jsonput(lineJSON, "unitLeasePaymentLine_c", unitLeasePayment);
+
+                }
+
+                if (sellableItem_l_c AND RsiTotalCondition == false AND part_custom_field18 <> "OKS-SUBSCRIPTION-STANDALONE" AND chargeType_l <> "Recurring" AND model_variable_name == "" AND ((parent_doc_number <> TSModelLine AND TSModelLine <> "") OR TSModelLine == "") // AND discountApplied =  = false
+                ) {
+                    jsonput(lineJSON, "leaseRate_c", leaseRate);
+                }
+                if ((part_custom_field18 == "OKS-SUBSCRIPTION-STANDALONE" OR chargeType_l == "Recurring") AND RsiTotalCondition == false) {
+
+                    jsonput(lineJSON, "monthlyPayment_c", round(itemSellingPrice, 2));
+                    jsonput(lineJSON, "extMonthlyPayment_c", itemSellingPrice * price_quantity);
+                }
+            }
+        }
+        //  print "%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%";
+
+
+
+        // 3rd tranaction loop   start
+
+        docNum = document_number;
+
+        linkedItem_l = jsonget(lineJSON, "linkedItem_l", "string", "");
+
+        partDescriptionOnProposal_l = jsonget(lineJSON, "partDescriptionOnProposal_l", "string", "");
+        model_product_line_name = jsonget(lineJSON, "_model_product_line_name", "string", "");
+        modelName_l_c = jsonget(lineJSON, "modelName_l_c", "string", "");
+        modelName_l_c = jsonget(lineJSON, "modelName_l_c", "string", "");
+
+        // PS LINKAGE Nestead Json for HARDWARE 
+        psLikageJson = json();
+        if (linkedItem_l <> "") {
+
+            jsonput(psLikageJson, "linked_qot_line_id", group_sequence_number);
+            jsonput(psLikageJson, "linked_edp_code", part_number);
+            jsonput(psLikageJson, "linked_quantity", price_quantity);
+            jsonput(psLikageJson, "linked_description", partDescriptionOnProposal_l);
+            jsonput(psLikageJson, "linked_to_line_no", linkedItem_l);
+
+            //jsonarrayappend(pSlinkageJsonArry,psLikageJson);
+            result = result + docNum + "~pSLinkageFlag_c~" + string(true) + "|";
+            jsonput(pSlikageMainJson, "linkedItems", psLikageJson);
+            result = result + document_number + "~pSLinkageLineJsonTextArea_c~" + jsontostr(pSlikageMainJson) + "|";
+        }
+
+        // to delete EFEE lines if not applicable
+        headerDict = dict("string");
+        put(headerDict, "Content-Type", "application/json");
+        if (EnvtFee_FLAG == false AND (part_number == "EFEE")) {
+            docNumber = document_number;
+            // Storing the document number to trigger the bulk API
+            selectionvalue = "transactionLine/" + docNumber;
+            jsonarrayappend(selectionjsonarray, selectionvalue);
+        }
+
+        // to delete EFEE lines if not applicable
+
+        if (containskey(ENVT_FEE_Parent, document_number) AND NOT pricelistRateFlag_c) {
+            if (findinarray(linkedLineArr, group_sequence_number) == -1 AND RunEFEE == "True") {
+                value = group_sequence_number;
+                qty = atof(get(ENVT_FEE_Qty, group_sequence_number));
+                /* print "RunEFEE";
+                 print RunEFEE;*/
+                eDPCodeJson1 = json();
+                partsArray1 = jsonarray();
+                jsonput(eDPCodeJson1, "partNumber", "EFEE");
+                jsonput(eDPCodeJson1, "quantity", (qty));
+                jsonput(eDPCodeJson1, "linkedItem_l", value);
+                jsonput(eDPCodeJson1, "linkedLineDocumentNumber_l_c", document_number); // Storing the document number for reference
+                EHF_CHARGE = get(ENVT_FEE_Price, value);
+                if (EHF_CHARGE <> "" AND not(isnull(EHF_CHARGE))) {
+                    MonthlyPayment = 0.0;
+                    extMonthlyPayment = 0.0;
+                    leaseRate = 0.0;
+                    EHF_CHARGE_Float = atof(EHF_CHARGE);
+                }
+                ExtPrice = get(ENVT_FEE_ExtPrice, value);
+                if (ExtPrice <> "" AND not(isnull(ExtPrice))) {
+                    ExtPrice_Float = atof(ExtPrice);
+                }
+                jsonput(eDPCodeJson1, "unitSRP_l", EHF_CHARGE_Float);
+                jsonput(eDPCodeJson1, "extSRP_l", EHF_CHARGE_Float * qty);
+                jsonput(eDPCodeJson1, "unitSalesCost_l", EHF_CHARGE_Float);
+                jsonput(eDPCodeJson1, "unitCost_l", EHF_CHARGE_Float);
+                jsonput(eDPCodeJson1, "contractedUnitPrice_l", EHF_CHARGE_Float);
+                jsonput(eDPCodeJson1, "contractPrice_l", EHF_CHARGE_Float);
+                jsonput(eDPCodeJson1, "unitSellingPrice_l", EHF_CHARGE_Float);
+                jsonput(eDPCodeJson1, "extSellingPrice_l", EHF_CHARGE_Float * qty);
+                //roundoff  for defect 34268
+                jsonput(eDPCodeJson1, "unitNetPrice_l", round(EHF_CHARGE_Float, 2));
+                jsonput(eDPCodeJson1, "extNetPrice_l", round(EHF_CHARGE_Float, 2) * qty);
+                //Added by Chandra to set GP% for EFEE lines
+                jsonput(eDPCodeJson1, "marginPercentagestdscost_l", 0.0);
+                jsonput(eDPCodeJson1, "marginPercentagesalescost_l", 0.0);
+                jsonarrayappend(partsArray1, eDPCodeJson1);
+                resultArray1 = addpartstotransaction(partsArray1, "_default_price_book");
+                //print "EDPCodePartAddition";
+                //print eDPCodeJson1;
+            }
+        }
+        // Added for CR 064 Start ----->
+        if ((model_product_line_name == "Multifunction Color" OR model_product_line_name == "Multifunction B&W") AND (findinarray(linkedLineArr, group_sequence_number) == -1)) {
+
+            if (findinarray(pricelistArr, combinedPriceListMenu_c) == -1) {
+                eDPCodeJson2 = json();
+                partsArray2 = jsonarray();
+                jsonput(eDPCodeJson2, "partNumber", "MFP-TRAIN-VIRTUAL");
+                jsonput(eDPCodeJson2, "quantity", 1);
+                jsonput(eDPCodeJson2, "linkedItem_l", group_sequence_number);
+                jsonput(eDPCodeJson2, "linkedLineDocumentNumber_l_c", document_number);
+                jsonput(eDPCodeJson2, "unitSRP_l", 0.0);
+                jsonput(eDPCodeJson2, "extSRP_l", 0.0);
+                jsonput(eDPCodeJson2, "unitSalesCost_l", 0.0);
+                jsonput(eDPCodeJson2, "unitCost_l", 0.0);
+                jsonput(eDPCodeJson2, "contractedUnitPrice_l", 0.0);
+                jsonput(eDPCodeJson2, "contractPrice_l", 0.0);
+                jsonput(eDPCodeJson2, "unitSellingPrice_l", 0.0);
+                jsonput(eDPCodeJson2, "extSellingPrice_l", 0.0);
+                jsonput(eDPCodeJson2, "unitNetPrice_l", 0.0);
+                jsonput(eDPCodeJson2, "extNetPrice_l", 0.0);
+                jsonput(eDPCodeJson2, "marginPercentagestdscost_l", 0.0);
+                jsonput(eDPCodeJson2, "marginPercentagesalescost_l", 0.0);
+                jsonarrayappend(partsArray2, eDPCodeJson2);
+                resultArray2 = addpartstotransaction(partsArray2, "_default_price_book");
+                //print "EDPCodePartAddition";
+                //print eDPCodeJson2;
+            }
+        }
+        // 3rd tranactionloop  end
+        jsonarrayappend(linesJArray, lineJSON);
+    }
+    jsonput(lineDetailsJSON, "lineDetails", linesJArray);
+    jsonput(lineDetailsJSON, "header", headerJSON);
+
+}
+if (federalFlg == true) {
+    result = result + "1~federalFlg_c~FEDERAL|";
+}
+// Invoking the bulk API to delete the lines
+if (jsonarraysize(selectionjsonarray) > 0) {
+    paramJson = json();
+    jsonput(paramJson, "selections", selectionjsonarray);
+    jsonput(paramJson, "bs_id", bs_id);
+    removeTransactionsJson = util.removeTransactionLineAPI(paramJson);
+}
+jsonput(pSlikageMainJson, "linkedItems", pSlinkageJsonArry);
+result = result + "1~pSLinkageJsonTextArea_c~" + jsontostr(pSlikageMainJson) + "|";
+//print "Final output Library";
+print result;
+
+return lineDetailsJSON;

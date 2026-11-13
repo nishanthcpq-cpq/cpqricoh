@@ -1,0 +1,83 @@
+// sample code to update chargeset array.
+combinedPriceListMenu = jsonget(pricingDocument, "combinedPriceListMenu_c", "string");
+leaseTerm_t_c  = jsonget(pricingDocument, "leaseTerm_t_c", "string");
+newLeaseType_c = jsonget(pricingDocument, "newLeaseType_c", "string");
+leaseBillingFrequency_c = jsonget(pricingDocument, "leaseBillingFrequency_c", "string");
+
+currentDatewithTimeStamp = getstrdate();
+currentDateStrArr = split(currentDatewithTimeStamp," ");
+currentDate = strtojavadate(datetostr(strtojavadate(currentDateStrArr[0],"MM/dd/yyyy"),"MM-dd-yyyy"),"MM-dd-yyyy");
+
+
+lines = jsonget(pricingDocument, "lines", "jsonarray");
+edpCodesJSONArray = jsonpathgetmultiple(pricingDocument, "$.lines[?(@._partNumber!= '')]._partNumber");
+//print edpCodesJSONArray  ;
+edpCodesArr = util.convertJSONArrayToStringArray(edpCodesJSONArray); //print edpCodesArr  ;
+priceListEdpCode = json();
+resultSet = bmql("select monthlyLeasePayment , activeStartDate , activeEndDate , partNumber from $_currentMatrix where priceList = $combinedPriceListMenu AND leaseDuration = $leaseTerm_t_c  AND leasetype = $newLeaseType_c AND leaseBillingFrequency = $leaseBillingFrequency_c AND partNumber in $edpCodesArr ");
+print resultSet ;
+
+for rec in resultSet {
+    plCashJson = json();
+    activeStartDate = get(rec, "activeStartDate");
+    activeEndDate = get(rec, "activeEndDate");
+    //billingfrequncy= get(rec,"leaseBillingFrequency");
+    Monthlylease = get(rec, "monthlyLeasePayment");
+
+    jsonput(plCashJson, "activeEndDate", activeEndDate);
+    jsonput(plCashJson, "activeStartDate", activeStartDate);
+    //jsonput(plCashJson,"billingfrequncy",billingfrequncy);
+    jsonput(plCashJson, "Monthlylease", Monthlylease);
+
+    jsonput(priceListEdpCode, get(rec, "partNumber"), plCashJson);
+}
+print priceListEdpCode;
+indexes = range(jsonarraysize(lines));
+
+for index in indexes {
+
+    line = jsonarrayget(lines, index, "json");
+    partNumber = ""; // jsonget(line,"_partNumber","string");
+    if (partNumber == "") {
+        continue;
+    }
+    edpCodePath = "$." + partNumber;
+    if (jsonpathcheck(priceListEdpCode, edpCodePath)) {
+    print "%%%%%%";
+        monthlylease = jsonpathgetsingle(priceListEdpCode, edpCodePath + ".Monthlylease", "float", 0.0);
+        activeStartDateInNumber = 0;
+        activeStartDateInStr = "";
+        activeStartDate = getdate();
+        activeStartDatewithTimeStamp =  jsonpathgetsingle(priceListEdpCode, edpCodePath + ".activeStartDate", "string", "");
+        if (activeStartDatewithTimeStamp <> "") {
+            activeStartDateStrArr = split(activeStartDatewithTimeStamp, " ");
+            activeStartDateInStr = activeStartDateStrArr[0];
+            activeStartDate = strtojavadate(activeStartDateInStr, "MM-dd-yyyy");
+        }
+        activeEndDateInNumber = 0;
+        activeEndDateInStr = "";
+        activeEndDate = getdate();
+        activeEndDatewithTimeStamp = jsonpathgetsingle(priceListEdpCode, edpCodePath + ".activeEndDate", "string", "");
+        if (activeEndDatewithTimeStamp <> "") {
+            activeEndDateStrArr = split(activeEndDatewithTimeStamp, " ");
+            activeEndDateInStr = activeEndDateStrArr[0];
+            activeEndDate = strtojavadate(activeEndDateInStr, "MM-dd-yyyy");
+        }
+        compareStartAndCurrentDate = comparedates(activeStartDate, currentDate);
+        compareCurrentAndEndDate = comparedates(currentDate, activeEndDate);
+        pickThisRecord = false;
+
+        if (activeStartDateInStr <> "" AND activeEndDateInStr <> "" AND (compareStartAndCurrentDate == 1 OR compareStartAndCurrentDate == 0) AND (compareCurrentAndEndDate == 1 OR compareCurrentAndEndDate == 0)) {
+            pickThisRecord = true;
+        } elif (activeStartDateInStr <> "" AND activeEndDateInStr == "" AND (compareStartAndCurrentDate == -1 OR compareStartAndCurrentDate == 0)) {
+            pickThisRecord = true;
+        }
+        if (pickThisRecord) {
+            jsonput(line, "hwMonthlylease_c", monthlylease);
+            print "inside pick "+ string(monthlylease);
+        }
+    }
+}
+print "pricingDocument pricingDocument";
+//print pricingDocument;
+return pricingDocument;

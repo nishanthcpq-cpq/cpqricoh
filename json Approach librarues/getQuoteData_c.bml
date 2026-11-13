@@ -1,0 +1,285 @@
+//creates JSON object and then 
+//calls all pricing scripts in the correct order
+
+quoteJSON = json(); // will be sent to each pricing script
+headerJSON = json(); //
+jsonput(headerJSON, "_system_company_name", _system_company_name);
+jsonput(headerJSON, "_system_buyside_id", _system_buyside_id);
+jsonput(headerJSON, "transactionID_t", transactionID_t);
+jsonput(headerJSON, "_system_current_step_var", _system_current_step_var);
+jsonput(headerJSON, "defaultRequestDate_t", defaultRequestDate_t);
+jsonput(headerJSON, "contractStartDate_t", contractStartDate_t);
+jsonput(headerJSON, "contractEndDate_t", contractEndDate_t);
+jsonput(headerJSON, "modelsContainsInQuote_t", modelsContainsInQuote_t);
+
+jsonput(headerJSON, "termMonths_t", termMonths_t);
+jsonput(headerJSON, "contractOtherTerm_t", contractOtherTerm_t);
+
+jsonput(headerJSON, "pIOFlag_c", pIOFlag_c);
+jsonput(headerJSON, "rebateType_t", rebateType_t);
+jsonput(headerJSON, "rebateValue_t", rebateValue_t);
+jsonput(headerJSON, "acquisitionType_t", acquisitionType_t);
+jsonput(headerJSON, "pricelistRateFlag_c", pricelistRateFlag_c);
+
+// trade-in fields
+
+jsonput(headerJSON, "iTSMRRTotalDealPricingMethod_c", iTSMRRTotalDealPricingMethod_c);
+jsonput(headerJSON, "gMPercentageITS_c", gMPercentageITS_c);
+jsonput(headerJSON, "monthlyPaymentITS_c", monthlyPaymentITS_c);
+jsonput(headerJSON, "rACUserOrg_c", racUserOrg_c);
+jsonput(headerJSON, "fYStartCustomerType_t", fYStartCustomerType_t);
+jsonput(headerJSON, "fYStartCustomerTypeException_t", fYStartCustomerTypeException_t);
+jsonput(headerJSON, "fYStartProductionZBA_t", fYStartProductionZBA_t);
+jsonput(headerJSON, "segmentLevel_t", segmentLevel_t);
+jsonput(headerJSON, "combinedPriceListMenu_c", combinedPriceListMenu_c);
+jsonput(headerJSON, "segment_t", segment_t);
+jsonput(headerJSON, "marketplace_t", marketplace_t);
+jsonput(headerJSON, "acquisitionType_t", acquisitionType_t);
+jsonput(headerJSON, "pricelistRateFlag_c", pricelistRateFlag_c);
+
+
+// trade-in fields end
+
+modelcontainarray = string [] ;
+// populate lines array
+linesJArray = jsonarray();
+linesData = jsonarray();
+for line in transactionLine {
+	lineJSON = json();
+	parentDocNum = line._parent_doc_number;
+	docNum = line._document_number;
+	partNum = line._part_number;
+	modelVarName = line._model_variable_name;
+
+	jsonput(lineJSON, "_document_number", docNum);
+	jsonput(lineJSON, "_part_number", partNum);
+	jsonput(lineJSON, "_parent_doc_number", parentDocNum);
+	jsonput(lineJSON, "_parent_line_item", line._parent_line_item);
+	jsonput(lineJSON, "_model_variable_name", modelVarName);
+	jsonput(lineJSON, "_model_name", line._model_name); if(findinarray ( modelcontainarray  , line._model_name ) == -1 ) { append ( modelcontainarray , line._model_name );}
+	jsonput(lineJSON, "_group_sequence_number", line._group_sequence_number);
+	//jsonput(lineJSON, "_is_coverage", line._is_coverage);
+	lineBomAttrs = "";
+	if (line._line_bom_attributes <> "") {
+		lineBomAttrs = replace(line._line_bom_attributes, "\\", "");
+		lineBomAttrs = replace(lineBomAttrs, "\"[", "[");
+		lineBomAttrs = replace(lineBomAttrs, "]\"", "]");
+		lineBomAttrs = replace(lineBomAttrs, "\"{", "{");
+		lineBomAttrs = replace(lineBomAttrs, "}\"", "}");
+	}
+
+	jsonput(lineJSON, "_line_bom_attributes", lineBomAttrs);
+	jsonput(lineJSON, "_part_desc", line._part_desc);
+	jsonput(lineJSON, "_price_calculation_info", line._price_calculation_info);
+	jsonput(lineJSON, "_price_list_price_each", line._price_list_price_each);
+	jsonput(lineJSON, "_price_quantity", line._price_quantity); //321013 
+	jsonput(lineJSON, "_price_unit_price_each", line._price_unit_price_each);
+
+	jsonput(lineJSON, "contractStartDate_l", line.contractStartDate_l);
+	jsonput(lineJSON, "contractEndDate_l", line.contractEndDate_l);
+	jsonput(lineJSON, "customDiscountAmount_l", line.customDiscountAmount_l);
+	jsonput(lineJSON, "customDiscountType_l", line.customDiscountType_l);
+	jsonput(lineJSON, "customDiscountValue_l", line.customDiscountValue_l);
+	jsonput(lineJSON, "discountAmount_l", line.discountAmount_l);
+	jsonput(lineJSON, "discountPercent_l", line.discountPercent_l);
+	jsonput(lineJSON, "listAmount_l", line.listAmount_l);
+	jsonput(lineJSON, "listPrice_l", line.listPrice_l);
+	jsonput(lineJSON, "netPrice_l", line.netPrice_l);
+	jsonput(lineJSON, "netAmount_l", line.netAmount_l);
+	jsonput(lineJSON, "oRCL_ABO_ActionCode_l", line.oRCL_ABO_ActionCode_l);
+
+	jsonput(lineJSON, "pricePeriod_l", line.pricePeriod_l);
+	jsonput(lineJSON, "priceType_l", line.priceType_l);
+	jsonput(lineJSON, "rootLine_l", line.rootLine_l);
+
+	// XASS start 
+	jsonput(lineJSON, "bundleNameXaaS_c", line.bundleNameXaaS_c);
+	jsonput(lineJSON, "bundleName_l", line.bundleName_l);
+	jsonput(lineJSON, "substituteQuantity_c", line.substituteQuantity_c);
+	jsonput(lineJSON, "unitSalesCost_l", line.unitSalesCost_l);
+	jsonput(lineJSON, "unitCost_l", line.unitCost_l);
+	jsonput(lineJSON, "bundleID_l", line.bundleID_l);
+	jsonput(lineJSON, "oracleSetName_l", line.oracleSetName_l);
+	jsonput(lineJSON, "chargeType_l", line.chargeType_l);
+	jsonput(lineJSON, "bundleSubscription", line.bundleSubscription);
+	jsonput(lineJSON, "rWAFlatPricing_c", line.rWAFlatPricing_c);
+
+	// XAAS end 
+
+	// BEGIN Quotesummary 
+	jsonput(lineJSON, "extSRP_l", line.extSRP_l);
+	jsonput(lineJSON, "extUnitStandardCost_l", line.extUnitStandardCost_l);
+	jsonput(lineJSON, "contractedUnitPrice_l", line.contractedUnitPrice_l);
+	jsonput(lineJSON, "extUnitContractTargetPrice_l", line.extUnitContractTargetPrice_l);
+	jsonput(lineJSON, "extNetPrice_l", line.extNetPrice_l);
+	jsonput(lineJSON, "extSellingPrice_l", line.extSellingPrice_l);
+	jsonput(lineJSON, "unitSellingPrice_l", line.unitSellingPrice_l);
+	jsonput(lineJSON, "extUnitSalesCost_l", line.extUnitSalesCost_l);
+	jsonput(lineJSON, "unitSRP_l", line.unitSRP_l);
+	jsonput(lineJSON, "subscriptionTerm_l", line.subscriptionTerm_l);
+	jsonput(lineJSON, "nonStandardTerm_l", line.nonStandardTerm_l);
+	jsonput(lineJSON, "_part_custom_field23", line._part_custom_field23);
+	businessLine_c = "" ;
+	if( line.businessLine_c == ""){
+		businessLine_c = line._part_custom_field289;
+		}
+		
+	jsonput(lineJSON, "businessLine_c", businessLine_c );
+	jsonput(lineJSON, "_part_custom_field289", line._part_custom_field289);
+	jsonput(lineJSON, "itemIdentifier_c", line.itemIdentifier_c);
+
+	jsonput(lineJSON, "modelName_l_c", line.modelName_l_c);
+	jsonput(lineJSON, "componentCode_l_c", line.componentCode_l_c);
+	jsonput(lineJSON, "_line_bom_part_number", line._line_bom_part_number);
+	jsonput(lineJSON, "_line_bom_part_number", line._line_bom_part_number);
+	// END  Quotesummary 	
+	
+	jsonput(lineJSON, "_chargeSet", line._chargeSet);//ChargeSet	
+
+	//BEGIN Lines Data 
+	lineData = json();
+	jsonput(lineData, "type_l", line.type_l);
+	jsonput(lineData, "_model_name", line._model_name);
+	jsonput(lineData, "modelName_l_c", line.modelName_l_c);
+	jsonput(lineData, "_part_number", line._part_number);
+	jsonput(lineData, "_document_number", line._document_number);
+	jsonput(lineData, "_model_variable_name", line._model_variable_name);
+	jsonput(lineData, "_parent_doc_number", line._parent_doc_number);
+	jsonput(lineData, "bundleID_l", line.bundleID_l);
+	jsonput(lineData, "configCommentsNew_l", line.configCommentsNew_l);
+	jsonput(lineData, "thirdPartyFlag_c ", line.thirdPartyFlag_c);
+
+	jsonput(lineData, "bundleName_l", line.bundleName_l);
+	jsonput(lineData, "stickyCodeParts_l_c", line.stickyCodeParts_l_c);
+	jsonput(lineData, "linkedItem_l", line.linkedItem_l);
+
+	jsonput(lineData, "_line_display_name", line._line_display_name);
+	jsonput(lineData, "pSDeleteFlag_c", line.pSDeleteFlag_c);
+	jsonput(lineData, "extNetPrice_l", line.extNetPrice_l);
+	jsonput(lineData, "chargeType_l", line.chargeType_l);
+	jsonput(lineData, "bundleNameRWA", line.bundleNameRWA);
+	jsonput(lineData, "_line_bom_attributes", line._line_bom_attributes);
+	jsonput(lineData, "oscRefID_l", line.oscRefID_l);
+	jsonput(lineData, "mAPGENERICItemsStatus_l", line.mAPGENERICItemsStatus_l);
+	jsonput(lineData, "shippingAddress_c", line.shippingAddress_c);
+	jsonput(lineData, "locationSiteID_l", line.locationSiteID_l);
+	
+	jsonput(lineData, "_part_custom_field333", line._part_custom_field333);
+
+	//added on april 30 to avoid model name issue by farooq
+	jsonput(lineData, "custom_field23", line._part_custom_field23);
+	jsonput(lineData, "custom_field320", line._part_custom_field320);
+	//added as part of Defect# 33494 
+	jsonput(lineData, "custom_field293", line._part_custom_field293);
+	if (line.isStickyCodeAlreadyAddedForThisPart_c AND line.stickyCodeParts_l_c <> "Y") {
+		jsonput(lineData, "parentPSGroupSequence_c", "");
+	} elif (line.isStickyCodeAlreadyAddedForThisPart_c AND line.stickyCodeParts_l_c == "Y") {
+		jsonput(lineData, "parentPSGroupSequence_c", line.linkedItem_l);
+	}
+
+	jsonarrayappend(linesData, lineData);
+	//END Lines Data 
+
+
+	// Begin trade-in
+
+	jsonput(lineJSON, "sellableItem_l_c", line.sellableItem_l_c);
+	jsonput(lineJSON, "_part_custom_field18", line._part_custom_field18);
+	jsonput(lineJSON, "_part_custom_field317", line._part_custom_field317);
+	jsonput(lineJSON, "_part_custom_field284", line._part_custom_field284);
+	jsonput(lineJSON, "_line_bom_name", line._line_bom_name);
+	jsonput(lineJSON, "discounttype_l", line.discounttype_l);
+	jsonput(lineJSON, "itemType", line.itemType_c);
+
+	jsonput(lineJSON, "_part_custom_field289", line._part_custom_field289);
+	//jsonput(lineJSON, "_part_custom_field317", line._part_custom_field317);
+	jsonput(lineJSON, "_part_custom_field282", line._part_custom_field282);
+	jsonput(lineJSON, "_part_custom_field284", line._part_custom_field284);
+	jsonput(lineJSON, "unitNetPrice_l", line.unitNetPrice_l);
+	jsonput(lineJSON, "_part_custom_field7", line._part_custom_field7);
+	jsonput(lineJSON, "_part_custom_field318", line._part_custom_field318);
+	jsonput(lineJSON, "_part_custom_field328", line._part_custom_field328);
+	jsonput(lineJSON, "_part_custom_field82", line._part_custom_field82);
+	jsonput(lineJSON, "_part_custom_field25", line._part_custom_field25);
+	jsonput(lineJSON, "_sequence_number", line._sequence_number);
+	jsonput(lineJSON, "_part_custom_field23", line._part_custom_field23);
+	jsonput(lineJSON, "type_l", line.type_l);
+	//jsonput(lineJSON, "price_list_price_each", line._price_list_price_each);
+	jsonput(lineJSON, "vendorUnitCost_l", line.vendorUnitCost_l);
+	jsonput(lineJSON, "sellableItem_l_c", line.sellableItem_l_c);
+	jsonput(lineJSON, "isPickupAdded_c", line.isPickupAdded_c);
+	jsonput(lineJSON, "equipmentComments_c", line.equipmentComments_c);
+	jsonput(lineJSON, "vendorQuoteNumber_VLIG", line.vendorQuoteNumber_VLIG);
+	jsonput(lineJSON, "vendorName_l", line.vendorName_l);
+	jsonput(lineJSON, "_part_custom_field27", line._part_custom_field27);
+	jsonput(lineJSON, "discounttype_l", line.discounttype_l);
+	jsonput(lineJSON, "discountAmountt_l", line.discountAmountt_l);
+	jsonput(lineJSON, "_price_configurable_price", line._price_configurable_price);
+	//jsonput(lineJSON, "line_bom_attributes", line._line_bom_attributes);
+	jsonput(lineJSON, "promoCode_l", line.promoCode_l);
+	jsonput(lineJSON, "customSequenceForProposal_l", line.customSequenceForProposal_l);
+	jsonput(lineJSON, "customSequenceSuffix_l", line.customSequenceSuffix_l);
+	jsonput(lineJSON, "unitSRPBackend_l", line.unitSRPBackend_l);
+	jsonput(lineJSON, "includeInMS_l", line.includeInMS_l);
+	jsonput(lineJSON, "isPsFeePresent_l_c", line.isPsFeePresent_l_c);
+	jsonput(lineJSON, "extMonthlyPayment_c", line.extMonthlyPayment_c);
+	jsonput(lineJSON, "customSequenceForProposal_l", line.customSequenceForProposal_l);
+	jsonput(lineJSON, "modelBaseUnitCode_c", line.modelBaseUnitCode_c);
+	jsonput(lineJSON, "contracted_c", line.contracted_c);
+
+
+	jsonput(lineJSON, "partDescriptionOnProposal_l", line.partDescriptionOnProposal_l);
+	//jsonput(lineJSON, "_price_list_price_each", line._price_list_price_each);
+	//jsonput(lineJSON, "customSequenceSuffix_l", line.customSequenceSuffix_l);
+	itemType  = line._part_custom_field23 ;
+	if ((line.modelName_l_c == "Hardware" AND line.componentCode_l_c <> "") OR (line._part_custom_field289 == "TRADITIONAL") OR (line.modelName_l_c == "Hardware" AND line._model_name <> "") OR (line.modelName_l_c == "Seasoned Product" AND line.componentCode_l_c <> "") OR (line.modelName_l_c == "Seasoned Product" AND line._model_name <> "")) {
+		if (line.type_l <> "REFINANCE") {
+			itemType = "HARDWARE";  
+		}
+	} else {
+	if (line.type_l <> "REFINANCE") {
+		itemType = line._part_custom_field23;  
+		}
+	}
+	if (line.type_l == "REFINANCE") { 
+		itemType = "REFINANCE";  
+	}
+	jsonput(lineJSON, "type_l", itemType );
+	
+	if(line.preparedBy_l <> ""){
+		jsonput(lineJSON, "preparedBy_l", line.preparedBy_l);
+	}else{
+		jsonput(lineJSON, "preparedBy_l", _system_user_login);
+		}
+/*sma = 0.0 ; cashprice  =0.00; hwtarget = 0.00 ; productfloor  =0.00;
+		if(NOT isnull(line._chargeSet) and jsonarraysize(line._chargeSet) > 0) {
+		chargeJSON = jsonArrayget(line._chargeSet, 0, "json");
+		sma = jsonget(chargeJSON ,"_chargeSet_sMA_CashPrice_c", "float",0.0);
+		cashprice = jsonget(chargeJSON ,"_chargeSet_cashPrice_c", "float",0.0);
+		//leasebasis = jsonget(chargeJSON ,"_chargeSet_standardCost_c", "float",0.0);
+		hwtarget = jsonget(chargeJSON ,"_chargeSet_hardwareTargetPrice_c", "float",0.0);
+		productfloor = jsonget(chargeJSON ,"_chargeSet_productFloor_c", "float",0.0);
+	}*/
+	jsonput(lineJSON, "sMA_l_c", line.sMA_l_c);
+	jsonput(lineJSON, "cashPrice_l_c", line.cashPrice_l_c );
+	jsonput(lineJSON, "productFloor_l_c", line.productFloor_l_c);
+	jsonput(lineJSON, "hardwareTargetPrice_l_c", line.hardwareTargetPrice_l_c);
+	jsonput(lineJSON, "leaseBasisPrice_l_c", line.leaseBasisPrice_l_c);
+	jsonput(lineJSON, "monthlyLeasePayment_l_c", line.monthlyLeasePayment_l_c);
+	        jsonput(lineJSON ,"hwMonthlylease_c", line.hwMonthlylease_c);
+	//jsonput(lineJSON, "contracted_c", line.contracted_c);
+
+
+
+	// End trade-In 
+//print "Suresh : DEBUG : 108 "+transactionID_t + string(line.unitSRP_l);
+//print "Suresh : DEBUG : 108 "+transactionID_t + string(line.unitSellingPrice_l);
+
+	jsonarrayappend(linesJArray, lineJSON);
+}
+jsonput ( headerJSON, "modelsContainsInQuote_t" , join(modelcontainarray , "$$"));
+jsonput(headerJSON, "linesData_c", jsonarraytostr(linesData));
+jsonput(quoteJSON, "header", headerJSON);
+jsonput(quoteJSON, "lineDetails", linesJArray);
+
+return quoteJSON;

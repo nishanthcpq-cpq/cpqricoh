@@ -1,0 +1,375 @@
+/*
+Author - Suresh Thota
+CR: CHG0097681: Hardware Configurations in CPQ
+Description - Created this new Util to get BOM structure from the BOM Defiantion Table
+
+*/
+returnJSON = json();
+modelNameU = upper(modelName);
+attributeValJSON = json(attributeValString);
+
+// Added for Seasoned models 26-09-25
+Serial_Number = "";
+WareHouse = "";
+   selectedPreownedObj = jsonget(attributeValJSON,"selectedPreowned","string","");
+   if(selectedPreownedObj <> "" AND not(isnull(selectedPreownedObj))){
+   	Serial_Number = jsonget( json(selectedPreownedObj),"Serial_Number","string","");
+   	   	WareHouse = jsonget( json(selectedPreownedObj),"WareHouse","string","");
+ 	}
+
+selectedItems = jsonget(attributeValJSON,"BOM","jsonarray",jsonarray()) ;
+orderType = jsonget(attributeValJSON,"orderType","string","") ;
+mainUnitEDPCode = jsonget(attributeValJSON,"mainUnitEDPCode","string","") ;//Defect #32913
+mainUnitDesc = "";
+recordset = BMQL("Select ItemDescription from RAC_MODEL_UI_CONTENT where EDPCode =$mainUnitEDPCode");//Defect #32913
+for rec in recordSet{
+	mainUnitDesc = get(rec, "ItemDescription") ;
+}
+OrgName = "RUS";
+recordSet= bmql("select rACUserOrg_c,pIOFlag_c from commerce.transaction");
+for rec in recordSet{
+	OrgName = get(rec, "rACUserOrg_c") ;
+}
+print OrgName ;
+selectedItemsArr = string[];
+configureItem = jsonget(attributeValJSON,"configureItem");
+orderTypeArr = split(orderType,"-");
+SUSItem = "SUS-"+orderTypeArr[0];
+append(selectedItemsArr,SUSItem );
+//print selectedItems;
+indexes = range(jsonarraysize(selectedItems));
+for i in indexes{
+	itemObj = jsonarrayget(selectedItems,i,"json");
+	itemPath = jsonget(itemObj,"itemPath","string","");
+	partNumber = jsonget(itemObj,"partNumber","string","");
+	itemPathArr = split(itemPath,".");
+	//if(_user_login == "Suresh.Thota@ricoh-usa.com" OR _user_login == "gandeev.potnuru@ricoh-usa.com"){
+
+		if(find(itemPath,".") == -1){
+			append(selectedItemsArr,itemPath);
+		}else{
+
+			itemVarName = orderType ;
+			if(find(itemPath,orderType+".") <> -1){//defect 131 - PRO8420-RIC.PRO8420-RIC.PRO8420-C.SUS-STREAMWIREPOOL
+				itemVarName = "";
+			}
+			for item in itemPathArr{
+				//print item ;
+				if(itemVarName == ""){//defect 131 added if condition
+					itemVarName =  item;
+				}else{
+					itemVarName = itemVarName + "."+ item;
+				}
+				append(selectedItemsArr,itemVarName);
+
+			}
+		}
+	/*}else{
+		itemVarName = "";
+		for item in itemPathArr{
+			if(itemVarName == ""){
+				itemVarName =  item;
+			}else{
+				itemVarName = itemVarName + "."+ item;
+			}
+
+			append(selectedItemsArr,itemVarName);
+		}
+	}*/
+}
+//print selectedItemsArr;
+if(isempty(selectedItemsArr)){
+	append(selectedItemsArr,"dummy");
+
+}
+//bundle = jsonpathgetsingle(attributeValJSON,"$..[?(@.IsBundle== 'Y')].itemPath","string","");
+bundleItemPath = jsonpathgetsingle(attributeValJSON,"$..[?(@.IsBundle== 'Y')].itemPath","string","");
+bundle = "dummy";
+bundle1 = "dummy";
+if(bundleItemPath <> ""){
+	/*recordSet = bmql("SELECT * FROM Oracle_BomItemDef2 WHERE RootVariableName = $modelNameU and PartNumber = $bundleItem ");
+	for rec in recordSet {
+	 	VariableName= get(rec, "VariableName");
+	 	itemPathArr = split(VariableName,".");
+	 	//itemsToIncludeStr = join(selectedItemsArr,"#") + "#"+ join(itemsToInclude,"#");
+	 	//selectedItemsArr = split(itemsToIncludeStr,"#");
+	 	//itemPathArr = itemsToInclude ;
+		itemVarName = "";
+		for item in itemPathArr{
+			if(itemVarName == ""){
+				itemVarName =  item;
+			}else{
+				itemVarName = itemVarName + "."+ item;
+			}
+
+			append(selectedItemsArr,itemVarName);
+		}
+	 	bundle = VariableName +"%";
+	}*/
+	itemPathArr = split(bundleItemPath,".");
+	itemVarName = "";
+	for item in itemPathArr{
+		if(itemVarName == ""){
+			itemVarName =  item;
+		}else{
+			itemVarName = itemVarName + "."+ item;
+		}
+
+		append(selectedItemsArr,itemVarName);
+	}
+	//bundle = bundleItemPath +"%";//defect 56 IMC4510-RIC was missing in the path
+	if(find(bundleItemPath,orderType + ".") == -1){//P502-RWA.P502-RWA.WFH-P502.P502-WFH-DEV-S.P502-WFH-RS%
+ 		bundle = orderType + "."+ bundleItemPath +"%";//defect 56 added IMC4510-RIC  to the path
+ 	}else{
+ 		bundle =  bundleItemPath +"%";
+ 	}
+
+ 	itemPathArr1 = split(bundleItemPath,".");
+ 	remove(itemPathArr1,sizeofarray(itemPathArr1)-1);
+ 	bundle1 = orderType + "."+ join(itemPathArr1,".")+"%";//change WFH-M320F.M320F-WFH-DEV-S.M320F-WFH-RS to WFH-M320F.M320F-WFH-DEV-S to include other items under bundle
+
+}
+
+/*if(bundleItem  == ""){
+	bundle = "dummy";
+}else{
+	bundle = bundleItem +"%";
+}*/
+
+print "selectedItemsArrselectedItemsArr";
+//print attributeValString;
+print bundle ;
+print bundle1 ;
+//print selectedItemsArr;
+//print modelNameU;
+childArr = jsonarray();
+mastrJson = json();
+itemStatusDict = dict("string");
+orgNameDict = dict("string");
+OrgItemStatusDict = dict("string");
+print selectedItemsArr;
+recordSet = bmql("SELECT * FROM Oracle_BomItemDef2 WHERE (ParentVariableName IS NULL and RootVariableName = $modelNameU) OR  (RootVariableName = $modelNameU and VariableName in $selectedItemsArr) OR (RootVariableName = $modelNameU and (ParentVariableName like $bundle OR VariableName like $bundle1)) OR (RootVariableName = $modelNameU and PartNumber = $SUSItem)");// 10-03-2026 CHG0105953 by gandeev added  OR (RootVariableName = $modelNameU and PartNumber = $SUSItem)
+
+//print recordSet ;
+//if(bundleItemPath <> ""){
+	EDPCodes = string[];
+	for rec in recordSet {
+		substreffectFrom = substring(get(rec, "EffectiveFrom"), 0, 10);
+		//print substreffectFrom;
+		substreffectTo =  substring(get(rec, "EffectiveTo"), 0, 10);
+
+	   if (NOT util.validateDates(substreffectFrom, substreffectTo, getdate())) {
+		   continue;
+	   }
+	   ptNumber = get(rec, "PartNumber");
+	   append(EDPCodes,ptNumber);
+	}
+
+	partsRecordSet = bmql("select part_number ,custom_field1,custom_field326,custom_field337,custom_field338 from _parts where part_number in $EDPCodes");
+	for partRec in partsRecordSet{
+		put(itemStatusDict,get(partRec ,"part_number"),get(partRec ,"custom_field1"));
+		put(orgNameDict ,get(partRec ,"part_number"),get(partRec ,"custom_field326"));
+		put(OrgItemStatusDict ,get(partRec ,"custom_field326") +"#"+ get(partRec ,"part_number")+"#RUS",get(partRec ,"custom_field337"));
+		put(OrgItemStatusDict ,get(partRec ,"custom_field326") +"#"+ get(partRec ,"part_number")+"#RCI",get(partRec ,"custom_field338"));
+	}
+
+//}
+//print OrgItemStatusDict ;
+for rec in recordSet {
+
+    substreffectFrom = substring(get(rec, "EffectiveFrom"), 0, 10);
+    //print substreffectFrom;
+    substreffectTo =  substring(get(rec, "EffectiveTo"), 0, 10);
+    //print substreffectTo;
+   /*if (NOT util.validateDates(get(rec, "EffectiveFrom"), get(rec, "EffectiveTo"), getdate())) {
+       continue;
+   }*/
+   // Fix for same effectivefrom and effectiveto date issue
+   if (NOT util.validateDates(substreffectFrom, substreffectTo, getdate())) {
+       continue;
+   }
+
+    ptNumber = get(rec, "PartNumber");
+    parentVariableName = get(rec, "ParentVariableName");
+	//if(bundleItemPath <> ""){
+		if(parentVariableName <> "" and (NOT containskey(itemStatusDict,ptNumber)
+			OR (containskey(itemStatusDict,ptNumber) and get(itemStatusDict,ptNumber) <> "Active"))){
+
+			print ptNumber+"==="+get(itemStatusDict,ptNumber);
+			continue;
+		}
+		if(containskey(orgNameDict ,ptNumber)){
+			itemOrgName = get(orgNameDict ,ptNumber);
+			checkOrg = (OrgName == "" OR itemOrgName == "" OR itemOrgName == "ALL"
+					OR itemOrgName ==  "NONE" OR itemOrgName ==  OrgName);
+			if(NOT checkOrg ){
+				print 	ptNumber+"==="+itemOrgName ;
+				continue;
+			}
+			if(checkOrg and itemOrgName <> "" and Serial_Number ==""){ // 10-03-2026 CHG0105953 by gandeev added and Serial_Number ==""
+				checkKey = itemOrgName +"#"+ ptNumber +"#RUS";
+				if(containskey(OrgItemStatusDict,checkKey) and OrgName == "RUS"){
+					orgItemStatus = get(OrgItemStatusDict,checkKey);
+					if(NOT isnull(orgItemStatus) and orgItemStatus <> "null" and UPPER(orgItemStatus) <> "ACTIVE"){
+						continue;
+					}
+				}
+				checkKey = itemOrgName +"#"+ ptNumber +"#RCI";
+				if(containskey(OrgItemStatusDict,checkKey) and OrgName == "RCI"){
+					OrgItemStatus = get(OrgItemStatusDict,checkKey);
+					if(NOT isnull(orgItemStatus) and orgItemStatus <> "null" and UPPER(orgItemStatus) <> "ACTIVE"){
+						continue;
+					}
+				}
+
+			}
+		}
+
+	//}
+    ItemType = get(rec, "ItemType");
+    optional = get(rec, "Optional");
+    id = get(rec, "VariableName");
+    //print id ;
+
+    rootVariableName = get(rec, "RootVariableName");
+    ///OriginalRoot = get(rec, "OriginalRoot");
+    defaultQuantity = getFloat(rec, "DefaultQuantity");
+    startDate = get(rec, "EffectiveFrom");
+    endDate = get(rec, "EffectiveTo");
+    modelPath = get(rec, "ModelPath");
+    componentCode = get(rec, "ComponentCode");
+
+    if (upper(ItemType) == "ROOT" and (parentVariableName == "" OR isnull(parentVariableName))) {
+
+        jsonput(mastrJson, "partNumber", ptNumber);
+        jsonput(mastrJson, "quantity", "1");
+        jsonput(mastrJson, "explodedQuantity", "1");
+        jsonput(mastrJson, "id", id);
+        jsonput(mastrJson, "isModel", true);
+        jsonput(mastrJson, "variableName", id);
+        jsonput(mastrJson, "parentId", "");
+        jsonput(mastrJson, "configurablePrice", 0);
+        jsonput(mastrJson, "Description", "");
+
+
+
+        jsonput(mastrJson, "children", jsonarray());
+
+        fieldsJson = json();
+        jsonput(fieldsJson, "componentCode_l_c", "");
+        jsonput(fieldsJson, "restLineFlag_c", false);
+        if(Serial_Number <> ""){  //Added for Seasoned model and Serial number in Config comments
+            jsonput(fieldsJson, "configCommentsNew_l", "Seasoned - #"+ Serial_Number );
+            jsonput(fieldsJson, "modelName_l_c", "Seasoned Product");
+	    jsonput(fieldsJson, "serialNumber_l_c", Serial_Number);
+	    jsonput(fieldsJson, "warehouse_SeasonedProduct_l_c", WareHouse);
+	    jsonput(fieldsJson, "_is_line_item_mandatory", true);
+
+        }else{
+        	        jsonput(fieldsJson, "modelName_l_c", "Hardware");
+
+
+        }
+       jsonput(mastrJson, "fields", fieldsJson);
+
+       /*Defect #32913*/
+       attributes = json();
+
+       edpCodeDesc = json();
+       jsonput(edpCodeDesc ,"value",mainUnitEDPCode);
+       jsonput(edpCodeDesc ,"displayValue",mainUnitDesc);
+       jsonput(edpCodeDesc ,"label",mainUnitDesc);
+
+       jsonput(attributes ,"EquipmentModel",edpCodeDesc);
+       jsonput(mastrJson, "attributes", attributes );
+       /*Defect #32913*/
+
+    } else {
+        childjson = json();
+        jsonput(childjson, "partNumber", ptNumber);
+        defaultQuantity = 1;
+
+	defaultQuantityArr = jsonpathgetmultiple(attributeValJSON,"$.BOM[?(@.itemPath == '"+id+"' )].quantity");
+	//print "defaultQuantityArr";
+	//print defaultQuantityArr;
+	//print attributeValJSON;
+	if(jsonarraysize(defaultQuantityArr) > 0){
+		defaultQuantity = jsonarrayget(defaultQuantityArr,0,"integer");
+		if(defaultQuantity == 0){
+			defaultQuantity = 1;
+		}
+	}
+	//print "ididid"+id;
+	//print defaultQuantity ;
+
+	jsonput(childjson, "quantity", defaultQuantity);
+
+        jsonput(childjson, "id", id);
+        jsonput(childjson, "variableName", id);
+        jsonput(childjson, "parentId", parentVariableName);
+        jsonput(childjson, "isModel", false);
+        jsonput(childjson, "startDate", startDate);
+        jsonput(childjson, "endDate", endDate);
+
+        defJson = json();
+        jsonput(defJson, "SequenceNum", 0);
+		jsonput(defJson, "ItemType", ItemType);
+        jsonput(defJson, "ItemId", id);
+        jsonput(childjson, "definition", defJson);
+
+        fieldsJson = json();
+        jsonput(fieldsJson, "componentCode_l_c", componentCode);
+	if(Serial_Number <> ""){  //Added for Seasoned model and Serial number in Config comments
+            jsonput(fieldsJson, "configCommentsNew_l", "Seasoned - #"+ Serial_Number );
+            jsonput(fieldsJson, "modelName_l_c", "Seasoned Product");
+            jsonput(fieldsJson, "serialNumber_l_c", Serial_Number);
+            jsonput(fieldsJson, "warehouse_SeasonedProduct_l_c", WareHouse);
+ 	    jsonput(fieldsJson, "_is_line_item_mandatory", true);
+
+        }else{
+        	        jsonput(fieldsJson, "modelName_l_c", "Hardware");
+
+
+        }
+
+        jsonput(childjson, "fields", fieldsJson);
+        jsonarrayappend(childArr, childjson);
+
+
+
+    }
+}
+
+jsonput(mastrJson, "children", childArr);
+//print mastrJson;
+fullBOM = convertbomtohier(mastrJson);
+//temp = fullBOM ;
+//fulBOM = json(otherParams);
+removeOrphanedParents = jsonpathgetmultiple(fullBOM ,"$..children[?(@.definition.ItemType == 'Option Class')]");
+//print removeOrphanedParents ;
+rIndexes = range(jsonarraysize(removeOrphanedParents));
+for i in rIndexes {
+	removeOrphanedParent= jsonarrayget(removeOrphanedParents,i ,"json");
+	//print removeOrphanedParent;
+	partNumber = jsonget(removeOrphanedParent,"partNumber","string","");
+	children = jsonget(removeOrphanedParent,"children","jsonarray");
+	itemType = jsonpathgetsingle(removeOrphanedParent,"$.definition.ItemType","string");
+	//print jsonpathgetsingle(temp ,removePath ,"json");
+	print partNumber ;
+	print jsonarraysize(children);
+	print itemType ;
+	if(jsonarraysize(children) == 0 and itemType == "Option Class"){
+		removePath = "$..children[?(@.partNumber == '"+partNumber +"')]";
+		jsonpathremove(fullBOM ,removePath);
+	}
+}
+//print temp ;
+//print "childArrchildArr=="+modelNameU ;
+//print childArr;
+//print "fullBOM fullBOM ";
+//print fullBOM ;
+
+//print mastrJson;
+//finalBOM = convertbomtohier(mastrJson);
+jsonput(returnJSON, "BOM_DATA", fullBOM);
+return returnJSON;

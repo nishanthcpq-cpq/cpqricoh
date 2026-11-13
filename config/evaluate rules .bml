@@ -1,0 +1,2386 @@
+/*
+Author: Suresh Thota / Srinivasa Gangavarapu
+CR: CHG0097681: Hardware Configurations in CPQ
+Description: It simulates the EBS rules engine by programmatically triggering rule evaluation logic, 
+including auto-selection and auto-unselection of components, chained rule execution, 
+and the generation of rule-based validation messages.
+*/
+
+
+startTime1 = getcurrenttimeinmillis();
+startTime = getcurrenttimeinmillis();
+currentAppliedRuleIds = string[];
+constraintAndRecStringJson = json();
+if (constraintAndRecString <> "") {
+    constraintAndRecStringJson = json(constraintAndRecString);
+    currentAppliedRuleIdsJArray = jsonpathgetmultiple(constraintAndRecStringJson, "$..appliedRuleId");
+    indexes = range(jsonarraysize(currentAppliedRuleIdsJArray));
+    for i in indexes {
+        append(currentAppliedRuleIds, jsonarrayget(currentAppliedRuleIdsJArray, i, "string"));
+    }
+}
+otherParamsJSON = json();
+if (otherParams <> "") {
+    otherParamsJSON = json(otherParams);
+}
+suppressWarnings = jsonget(otherParamsJSON, "suppressWarnings", "boolean", false); // added by SureshThota --> SuppresWarning
+runOnce = jsonget(otherParamsJSON, "runOnce", "boolean", false);
+results = json();
+bomItemsArray = jsonarray();
+selectedItems = string[]; //{"SUS-DEVCWYPR","OC-PROC7500P-PH-S","OC-PROC7500P-PH","SUS-DEVWHITE1"};
+itemsPathsArr = string[];
+if (isnull(masterString) or trim(masterString) == "") {
+    ////print "here--->3";
+    defaultsAndMessages = json();
+    jsonput(defaultsAndMessages, "constraintMessages", json());
+    jsonput(results, "defaultsAndMessages", json());
+    jsonput(results, "BOM", jsonarray());
+    return results;
+}
+masterStringJSON = json(masterString);
+stepNamesJSONArr = jsonget(masterStringJSON, "stepNames", "jsonarray");
+orgName = jsonget(masterStringJSON, "OrgName", "string", "");
+displayStepNamesArr = string[];
+stepNamesArr = string[];
+rulePathsArr = string[];
+arraysetArr = string[];
+stepIndexes = range(jsonarraysize(stepNamesJSONArr));
+mainunit_arrayset = "";
+for eachInd in stepIndexes {
+    stepObj = jsonarrayget(stepNamesJSONArr, eachInd, "json");
+    dissplayStepName = jsonget(stepObj, "displayStepName", "string");
+    stepName = jsonget(stepObj, "stepName", "string");
+    arraySet = jsonget(stepObj, "arraysetName", "string");
+    rulePath = jsonget(stepObj, "rulePath", "string");
+    if (mainunit_arrayset == "" AND upper(jsonget(stepObj, "isMainDevice", "string", "")) == "Y") {
+        mainunit_arrayset = arraySet;
+    }
+    //append(displayStepNamesArr,dissplayStepName);
+    //append(stepNamesArr,stepName);
+    if (endswith(trim(stepName), "OPTION CLASS")) {
+        print "Name: " + trim(replace(trim(stepName), "OPTION CLASS", ""));
+        append(displayStepNamesArr, dissplayStepName);
+        append(stepNamesArr, trim(replace(trim(stepName), "OPTION CLASS", "")));
+        append(rulePathsArr, rulePath);
+        append(arraysetArr, arraySet);
+
+        /*Defect 28951 - IMC2510  - rule 122 - RDR-805R1AKU-G3 not found issue*/
+        append(displayStepNamesArr, dissplayStepName);
+        append(stepNamesArr, stepName);
+        append(rulePathsArr, rulePath);
+        append(arraysetArr, arraySet);
+    } else {
+        append(displayStepNamesArr, dissplayStepName);
+        append(stepNamesArr, stepName);
+        append(rulePathsArr, rulePath);
+        append(arraysetArr, arraySet);
+    }
+
+
+}
+////print "userSelections userSelections ";
+////print userSelections ;
+if (isnull(userSelections) or trim(userSelections) == "") {
+    ////print "here--->3";
+    defaultsAndMessages = json();
+    jsonput(defaultsAndMessages, "constraintMessages", json());
+    jsonput(results, "defaultsAndMessages", json());
+    jsonput(results, "BOM", jsonarray());
+    return results;
+}
+////print "here--->";
+userSelectionsJSON = json(userSelections);
+//-----------Checking Overriddenitems condtion SG ADDED ---> start
+autodeselectjsarray = jsonarray();
+unselectedrules = string[];
+override_flag = false;
+if (constraintAndRecString <> "") {
+    overrideitemspath = jsonpathcheck(userSelectionsJSON, "$..attributeAndValues[?(@.Override == 'true')]");
+    prevconstraint_arr = jsonarray();
+    if (overrideitemspath) {
+        overrideitems = jsonpathgetmultiple(userSelectionsJSON, "$..attributeAndValues[?(@.Override == 'true')]");
+        indexes = range(jsonarraysize(overrideitems));
+        override_flag = true;
+        for i in indexes {
+            overridejs = jsonarrayget(overrideitems, i, "json");
+            item = jsonget(overridejs, "item");
+            index = jsonget(overridejs, "index");
+            optionFeature = jsonget(overridejs, "optionFeature");
+            arraySet = jsonget(overridejs, "arraySet");
+            //making Override item selected in UI
+            //--------------------------------Start
+            tempjs = json();
+            jsonput(tempjs, "appliedRuleId", "");
+            jsonput(tempjs, "operator", "IMPLIES");
+            jsonput(tempjs, "setType", "set");
+            jsonput(tempjs, "value", true);
+            jsonput(tempjs, "targetIndex", index);
+            jsonput(tempjs, "targetAttribute", arraySet);
+            jsonput(tempjs, "selctionApplied", "Override"); // added to identify in Override in UI happened
+            jsonarrayappend(autodeselectjsarray, tempjs);
+            //---------------------------------END
+            prevconstraint_path = "$.defaultsAndMessages.recommendations[?(@.operator == 'EXCLUDES' && @.targetIndex =='" + index + "' && @.targetAttribute == '" + arraySet + "')]";
+            if (jsonpathcheck(constraintAndRecStringJson, prevconstraint_path)) {
+                prevconstraint_arr = jsonpathgetmultiple(constraintAndRecStringJson, prevconstraint_path);
+                index1 = range(jsonarraysize(prevconstraint_arr));
+                for j in index1 {
+                    prevconstraintjs = jsonarrayget(prevconstraint_arr, j, "json");
+                    chainRule = jsonget(prevconstraintjs, "chainRule", "string", "");
+                    ruleID = jsonget(prevconstraintjs, "appliedRuleId", "string"); //5
+                    rule_ID = jsonget(prevconstraintjs, "appliedRuleId", "string"); //Defect #28567
+                    sourceConditions = jsonget(prevconstraintjs, "sourceConditions", "string");
+                    actionConditions = jsonget(prevconstraintjs, "actionConditions", "string");
+                    sourceAttribute = jsonget(prevconstraintjs, "sourceAttribute", "string");
+                    targetAttribute = jsonget(prevconstraintjs, "targetAttribute", "string");
+                    sourceIndex = jsonget(prevconstraintjs, "sourceIndex", "string", "");
+                    targetIndex = jsonget(prevconstraintjs, "targetIndex", "string", "");
+                    functionName = jsonget(prevconstraintjs, "functionName", "string", "");
+                    actionFunctionName = jsonget(prevconstraintjs, "actionFunctionName", "string", "");
+                    combination_rule = jsonget(prevconstraintjs, "combination_rule", "boolean", false);
+                    operator = jsonget(prevconstraintjs, "operator", "string", "");
+                    if (combination_rule AND operator == "EXCLUDES" AND functionName == "ALLTRUE" AND actionFunctionName == "ANYTRUE") { //Defect 29912 - override issue
+                        continue;
+                    }
+                    if (chainRule <> "" AND NOT isnull(chainRule)) {
+                        chainRulepath = "$.defaultsAndMessages.recommendations[?(@.appliedRuleId =='" + chainRule + "' || @.appliedRuleId =='" + rule_ID + "')]"; //Defect #28567 added rule_ID  - P800#rule 5, 22633 should be excluded on override of 52642
+                        if (jsonpathcheck(constraintAndRecStringJson, chainRulepath)) {
+                            chainRulearray = jsonpathgetmultiple(constraintAndRecStringJson, chainRulepath);
+                            index2 = range(jsonarraysize(chainRulearray));
+                            for k in index2 {
+                                chainrulejs = jsonarrayget(chainRulearray, k, "json");
+                                ruleID = jsonget(chainrulejs, "appliedRuleId", "string");
+                                sourceConditions = jsonget(chainrulejs, "sourceConditions", "string");
+                                actionConditions = jsonget(chainrulejs, "actionConditions", "string");
+                                sourceAttribute = jsonget(chainrulejs, "sourceAttribute", "string");
+                                chainRuleOperator = jsonget(chainrulejs, "operator", "string", "");
+                                targetAttribute = jsonget(chainrulejs, "targetAttribute", "string");
+                                sourceIndex = jsonget(chainrulejs, "sourceIndex", "string", "");
+                                targetIndex = jsonget(chainrulejs, "targetIndex", "string", "");
+
+                                if (chainRuleOperator == "DEFAULTS") { //P800 , rule 5 override double update issue 
+                                    jsonput(chainrulejs, "setType", "set");
+                                    jsonput(chainrulejs, "value", false);
+                                } else {
+                                    jsonput(chainrulejs, "setType", "forceSet");
+                                    jsonput(chainrulejs, "value", false);
+                                }
+                                jsonput(chainrulejs, "sourceIndex", targetIndex);
+                                jsonput(chainrulejs, "targetIndex", sourceIndex);
+                                jsonput(chainrulejs, "sourceAttribute", targetAttribute);
+                                jsonput(chainrulejs, "targetAttribute", sourceAttribute);
+                                jsonput(chainrulejs, "sourceConditions", actionConditions);
+                                jsonput(chainrulejs, "actionConditions", sourceConditions);
+                                jsonput(chainrulejs, "deselctionAppliedRule", rule_ID);
+                                jsonput(chainrulejs, "deselctionApplied", "ChainingruleOverride");
+                                userselectedpath = "$..attributeAndValues[?(@.arraySet == '" + sourceAttribute + "' && @.index =='" + sourceIndex + "')]";
+                                if (jsonpathcheck(userSelectionsJSON, userselectedpath)) {
+                                    remVal1 = jsonpathremove(userSelectionsJSON, userselectedpath);
+                                }
+                                if (chainRuleOperator == "IMPLIES" OR chainRuleOperator == "DEFAULTS") { //Defect#29082 - rule 31 when E48B-MEM32GB is overridden remove 409767 from user selections//P800 , rule 5 override double update issue 
+                                    userselectedpath = "$..attributeAndValues[?(@.arraySet == '" + targetAttribute + "' && @.index =='" + targetIndex + "')]";
+                                    if (jsonpathcheck(userSelectionsJSON, userselectedpath)) {
+                                        remVal1 = jsonpathremove(userSelectionsJSON, userselectedpath);
+                                    }
+                                }
+                                jsonarrayappend(autodeselectjsarray, chainrulejs);
+                                append(unselectedrules, ruleID);
+                            }
+                        }
+                    } else {
+                        // making all targets available when Excludes alltrue scenario --------------Start added on 1-17-26
+                        //A exlcudes alltrue B,C,D--> if user selects A,B than C will get excluded
+                        //Expectation: When c is overridden A and B both will be available
+
+
+
+                        setType = "forceSet";
+                        //srini added " OR actionFunctionName == "ALLTRUE" on 09-15-2026 as part of incident 
+                        if (chainRule == "" AND (functionName == "ALLTRUE" OR actionFunctionName == "ALLTRUE")) {
+                            setType = "set";
+                        }
+                        //------------------------------------------------------------------END	
+                        jsonput(prevconstraintjs, "setType", setType);
+                        jsonput(prevconstraintjs, "value", false);
+                        jsonput(prevconstraintjs, "sourceIndex", targetIndex);
+                        jsonput(prevconstraintjs, "targetIndex", sourceIndex);
+                        jsonput(prevconstraintjs, "sourceAttribute", targetAttribute);
+                        jsonput(prevconstraintjs, "targetAttribute", sourceAttribute);
+                        jsonput(prevconstraintjs, "sourceConditions", actionConditions);
+                        jsonput(prevconstraintjs, "actionConditions", sourceConditions);
+                        jsonput(prevconstraintjs, "deselctionApplied", "DirectRuleOverride");
+                        userselectedpath = "$..attributeAndValues[?(@.arraySet == '" + sourceAttribute + "' && @.index =='" + sourceIndex + "')]";
+                        if (jsonpathcheck(userSelectionsJSON, userselectedpath)) {
+                            remVal1 = jsonpathremove(userSelectionsJSON, userselectedpath);
+                        }
+                        jsonarrayappend(autodeselectjsarray, prevconstraintjs);
+                        append(unselectedrules, ruleID);
+                    }
+                    //making rule source was constined if unselected tardet was overridden 	
+                }
+            }
+
+        }
+
+    }
+}
+
+////print "here--->1";
+modelName = jsonget(userSelectionsJSON, "modelName", "string", "");
+orderType = jsonget(userSelectionsJSON, "orderType", "string", "");
+selectedAccount = jsonget(userSelectionsJSON, "selectedAccount", "string", "");
+/*if(find(modelName,"_")<>-1){
+modelName =replace(modelName,"_","-",find(modelName,"_"));
+}*/
+configTypeArr = string[] {
+    "CONFIGURE EQUIPMENT"
+}; //Defect #26905
+logComments = jsonget(userSelectionsJSON, "logComments", "string", "");
+baseModel = jsonget(userSelectionsJSON, "orderType", "string", "");
+configureItem = jsonget(userSelectionsJSON, "configureItem", "string", "");
+configType = jsonget(userSelectionsJSON, "configurationType", "string", "");
+append(configTypeArr, configType); // Defect #26905
+if (configType == "REMAN ASSEMBLIES") { //Defect#60
+    configType = "CONFIGURE EQUIPMENT";
+}
+datatable = jsonget(userSelectionsJSON, "DataTable", "string", "Model_Config_Rules");
+typeOfProduct = jsonget(userSelectionsJSON, "TypeOfProduct", "string", "");
+mainUnitEDPCode = jsonget(userSelectionsJSON, "mainUnitEDPCode", "string", "");
+mainUnitEDPCodePath = jsonget(userSelectionsJSON, "mainUnitEDPCodePath", "string", "");
+
+//arraysets  = jsonpathgetmultiple(userSelections,"$.attributeAndValues..arraySet");
+items = jsonpathgetmultiple(userSelectionsJSON, "$.attributeAndValues..item");
+itemsPaths = jsonpathgetmultiple(userSelectionsJSON, "$.attributeAndValues..optionFeature");
+bundlesPaths = jsonpathgetmultiple(userSelectionsJSON, "$.attributeAndValues..IsBundle");
+quantities = jsonpathgetmultiple(userSelectionsJSON, "$.attributeAndValues..quantity");
+//print "here--->2";
+//main unit
+bomItem = json();
+jsonput(bomItem, "appliedRuleId", "");
+jsonput(bomItem, "partNumber", baseModel);
+jsonput(bomItem, "itemPath", baseModel);
+jsonput(bomItem, "quantity", 1);
+jsonput(bomItem, "IsBundle", "N");
+jsonarrayappend(bomItemsArray, bomItem);
+
+//configure item
+bomItem = json();
+jsonput(bomItem, "appliedRuleId", "");
+jsonput(bomItem, "partNumber", configureItem);
+jsonput(bomItem, "itemPath", configureItem);
+jsonput(bomItem, "quantity", 1);
+jsonput(bomItem, "IsBundle", "N");
+jsonarrayappend(bomItemsArray, bomItem);
+
+//configure item
+bomItem = json();
+jsonput(bomItem, "appliedRuleId", "");
+jsonput(bomItem, "partNumber", mainUnitEDPCode);
+jsonput(bomItem, "itemPath", mainUnitEDPCodePath);
+jsonput(bomItem, "quantity", 1);
+//if(typeOfProduct == "BUNDLEDPRODUCT"){
+//jsonput(bomItem,"IsBundle","Y");
+//}else{
+jsonput(bomItem, "IsBundle", "N");
+//}
+jsonarrayappend(bomItemsArray, bomItem);
+
+duplicateBOMItems = string[];
+////print items ;
+indexes = range(jsonarraysize(items));
+itemsArr = string[];
+for i in indexes {
+    //append(selectedItems,jsonarrayget(items,i));
+    if (findinarray(selectedItems, jsonarrayget(items, i)) == -1) {
+        append(selectedItems, jsonarrayget(items, i));
+    }
+    itemPath = jsonarrayget(itemsPaths, i);
+    append(itemsPathsArr, itemPath);
+    if (find(itemPath, ".") <> -1) {
+        tempItemArr = split(itemPath, ".");
+        for eachItem in tempItemArr {
+            append(itemsArr, eachItem);
+        }
+    } else {
+        append(itemsArr, itemPath);
+    }
+
+}
+////print ">>>>>>>>*****>>>>>>>>";
+////print itemsArr;
+optionFeatures = string[];
+options = string[];
+recordSet = bmql("select part_number from _parts where part_number in $itemsArr");
+for rec in recordSet {
+
+    append(options, get(rec, "part_number"));
+}
+////print optionFeatures;
+indexes = range(jsonarraysize(items));
+for i in indexes {
+    itemPath = jsonarrayget(itemsPaths, i);
+    Isbundle = jsonarrayget(bundlesPaths, i);
+    itemFound = true;
+    ////print typeOfProduct ;
+    ////print jsonarrayget(items,i);
+    ////print Isbundle ;
+    if (find(itemPath, ".") <> -1) {
+        tempItemArr = split(itemPath, ".");
+        for eachItem in tempItemArr {
+            itemFound = itemFound and findinarray(options, eachItem) <> -1;
+            if (findinarray(selectedItems, eachItem) == -1) {
+                append(selectedItems, eachItem);
+            }
+        }
+    } else {
+        itemFound = itemFound and findinarray(options, itemPath) <> -1;
+    }
+    if (itemFound OR (typeOfProduct == "BUNDLEDPRODUCT" and Isbundle == "Y")) { //ex:  ADDITIONAL UNIT will not be found in parts db
+        ////print jsonarrayget(items,i);
+        bomItem = json();
+        jsonput(bomItem, "appliedRuleId", "");
+        jsonput(bomItem, "partNumber", jsonarrayget(items, i));
+        jsonput(bomItem, "itemPath", jsonarrayget(itemsPaths, i) + "." + jsonarrayget(items, i));
+        if (Isbundle == "Y" and find(jsonarrayget(itemsPaths, i), " ") <> -1) {
+            jsonput(bomItem, "itemPath", configureItem + "." + jsonarrayget(items, i)); //defect 61- bundle path issue//RICOH HWAAS BUNDLES.//printINONE-IMC4510-ADV
+        }
+
+
+        if (isnumber(jsonarrayget(quantities, i))) {
+            jsonput(bomItem, "quantity", jsonarrayget(quantities, i));
+        } else {
+            jsonput(bomItem, "quantity", 1);
+        }
+        jsonput(bomItem, "IsBundle", Isbundle);
+
+        //jsonput(bomItem,"parentItem",actionCondition);
+        jsonarrayappend(bomItemsArray, bomItem);
+    } else {
+        append(optionFeatures, itemPath);
+    }
+}
+
+// =====================================================================================
+// CHG0097681 ADDITION - Preowned / Serialized unit guard
+// If the current selection is a preowned item carrying a Serial_Number, the EBS rules
+// engine simulation below (recommendations / AutoUnSelect / WaningMessages /
+// constraintMessages) must NOT run - a serialized preowned unit is a fixed, already
+// configured asset, not something the rule engine should re-derive recommendations for.
+// BOM construction above still runs normally; only the rules-engine block below is skipped.
+// =====================================================================================
+defaultsAndMessages = json();
+attributeValJSON = json(userSelections);
+Serial_Number = "";
+selectedPreownedObj = jsonget(attributeValJSON, "selectedPreowned", "string", "");
+if (selectedPreownedObj <> "" AND not(isnull(selectedPreownedObj))) {
+    Serial_Number = jsonget(json(selectedPreownedObj), "Serial_Number", "string", "");
+}
+isPreownedSerialSelected = (Serial_Number <> "");
+
+if (NOT isPreownedSerialSelected) {
+    ////print bomItemsArray;
+    ////print "optionFeaturesoptionFeatures";
+    ////print optionFeatures;
+    evalRuleDict = dict("boolean");
+    ////print selectedItems;
+    ////print itemsPaths ;
+    contributeRulesObj = json(); //defect#82 Model IMC4510 :  account specific accessories items are adding to BOM after update
+    contributeRulesArr = jsonarray(); //defect#82 Model IMC4510 :  account specific accessories items are adding to BOM after update
+    rulesData = json();
+    relationshipJSON = json();
+    relationshipJSONArray = jsonarray();
+    messageRuleIDs = string[];
+    modelname1 = upper(modelName);
+    rowCount = 0;
+
+    //   defect#34434 to trigger rule : ChooseAccount is SourceItem
+    choosenaccount = jsonpathgetsingle(userSelectionsJSON, "$.selectedAccount");
+    if (choosenaccount <> "" AND (NOT isnull(choosenaccount))) {
+        append(selectedItems, choosenaccount);
+    }
+    // --> defect#34434 end
+
+    /* query the CDL Rules for the current model*/
+    recordSet = bmql("select *  from $datatable where (ModelName = $modelName OR ModelName = $modelName1) and (BaseModel = $baseModel OR BaseModel IS NULL) and (IsActive = 'Y' OR IsActive IS NULL)"); //removed order by as it causes query limit to 1000recs
+    //recordSet = bmql("select *  from $datatable where (ModelName = $modelName OR ModelName = $modelName1) and (BaseModel = $baseModel OR BaseModel IS NULL) and (IsActive = 'Y' OR IsActive IS NULL) order by RuleID ,ConditionID");
+    for rec in recordSet {
+        rowCount = rowCount + 1;
+        ruleID = get(rec, "RuleID");
+        //if(ruleID <> "11" and ruleID <> "121"){continue;}
+        //if(ruleID <> "13"){continue;}
+        //if(ruleID == "181" and modelname1 == "IMC2510"){continue;}
+        ruleObj = jsonget(rulesData, ruleID, "json", json());
+        condID = get(rec, "ConditionID");
+        sourceItem = get(rec, "SourceItem");
+        targetItem = get(rec, "TargetItem");
+        functionName = get(rec, "Condition_Function");
+        //if(typeOfProduct == "BUNDLEDPRODUCT" and (upper(functionName) <> "CONTRIBUTE" and (sourceItem == targetItem))){
+        if (typeOfProduct == "BUNDLEDPRODUCT" and upper(functionName) <> "CONTRIBUTE") { //defect 61 - Model IMC4510 >> Bundle Error message(DEVICE IMPLIES PAPER FEED UNIT PB3320, 423699, LCIT PB3330, 419374, OR CABINET TYPE A5, 52721.) appears on the screen.
+            continue;
+        }
+        conditions = get(rec, "Conditions");
+        sourceItem = get(rec, "SourceItem");
+        targetItem = get(rec, "TargetItem");
+        multiplier = get(rec, "Multiplier");
+        defaultRule = get(rec, "DefaultRule"); //03/02/2026 added for C014
+        operator = get(rec, "Operator");
+        actionFunction = get(rec, "Action_Function");
+        actionCondition = get(rec, "Action_Conditions");
+        startDate = get(rec, "StartDate");
+        endDate = get(rec, "EndDate");
+        startDate_str = startDate;
+        endDate_str = endDate;
+        if (startDate <> "") {
+            tempStartArr = split(startDate, "-");
+            if (len(tempStartArr[1]) == 3) {
+                inputStartDate = strtodate(startDate, "dd-MMM-yy");
+                startDate_str = datetostr(inputStartDate, "dd/MM/yyyy");
+            } else {
+                inputStartDate = strtodate(startDate, "dd-mm-yyyy");
+                startDate_str = datetostr(inputStartDate, "dd/MM/yyyy");
+            }
+
+        }
+        if (endDate <> "") {
+            tempEndArr = split(endDate, "-");
+            if (len(tempEndArr[1]) == 3) {
+                inputEndDate = strtodate(endDate, "dd-MMM-yy");
+                endDate_str = datetostr(inputEndDate, "dd/MM/yyyy");
+            } else {
+                inputEndDate = strtodate(endDate, "mm-dd-yyyy");
+                endDate_str = datetostr(inputEndDate, "dd/MM/yyyy");
+            }
+
+        }
+        if (util.validateDates(startDate_str, endDate_str, getdate())) {
+            jsonput(ruleObj, "ruleId", ruleID);
+            jsonput(ruleObj, "functionName", upper(functionName));
+            jsonput(ruleObj, "actionFunctionName", upper(actionFunction));
+            jsonput(ruleObj, "operator", upper(operator));
+            jsonput(ruleObj, "multiplier", multiplier);
+            jsonput(ruleObj, "ErrorMessage", get(rec, "ErrorMessage"));
+            jsonput(ruleObj, "exludedItems", ""); //dummy...will be used in chainRules
+            jsonput(ruleObj, "defaultRule", defaultRule); //03/02/2026 added for C014
+            sourceItemsStr = jsonget(ruleObj, "sourceItems", "string", "");
+            /*if(sourceItems == ""){
+            	sourceItems = sourceItem;		
+            }else{
+            	sourceItems = sourceItems + "#" + sourceItem;
+            }*/
+            sourceItems = split(sourceItemsStr, "#");
+            if (findinarray(sourceItems, sourceItem) == -1 and sourceItemsStr == "") {
+                //append(sourceItems,sourceItem);
+                sourceItemsStr = sourceItem;
+            } elif (findinarray(sourceItems, sourceItem) == -1 and sourceItemsStr <> "") {
+                //append(sourceItems,sourceItem);
+                sourceItemsStr = sourceItemsStr + "#" + sourceItem;
+            }
+            targetItemsStr = jsonget(ruleObj, "targetItems", "string", "");
+            /*if(targetItems == ""){
+            	targetItems = sourceItem;		
+            }else{
+            	targetItems = targetItems + "#" + targetItem;
+            }*/
+            targetItems = split(targetItemsStr, "#");
+            if (findinarray(targetItems, targetItem) == -1 and targetItemsStr == "") {
+
+                targetItemsStr = targetItem;
+            } elif (findinarray(targetItems, targetItem) == -1 and targetItemsStr <> "") {
+
+                targetItemsStr = targetItemsStr + "#" + targetItem;
+            }
+            jsonput(ruleObj, "sourceItems", sourceItemsStr);
+            jsonput(ruleObj, "targetItems", targetItemsStr);
+            //jsonput(ruleObj,"sourceItems",join(sourceItems,"#"));
+            //jsonput(ruleObj,"targetItems",join(targetItems,"#"));
+
+            /*if (findinarray(selectedItems, sourceItem) <> -1 OR
+            	findinarray(selectedItems, targetItem) <> -1 OR
+            	findinarray(optionFeatures, sourceItem) <> -1 OR
+            	findinarray(optionFeatures, targetItem) <> -1 OR
+            	(upper(operator) == "EXCLUDES" AND selectedAccount <> "" AND find(UPPER(sourceItem), "CHOOSE ACCOUNT") <> -1) OR
+            	(upper(operator) == "EXCLUDES" AND selectedAccount <> "" AND find(UPPER(targetItem), "CHOOSE ACCOUNT") <> -1)
+            ) {
+            	jsonput(ruleObj, "executeRule", true);
+            }
+            */
+            condArr = jsonget(ruleObj, "conditions", "jsonarray", jsonarray());
+
+            condObj = json();
+            jsonput(condObj, "conditionId", condID);
+            jsonput(condObj, "sourceConditions", conditions);
+
+            jsonput(condObj, "actionConditions", actionCondition);
+
+            jsonput(condObj, "sourceItem", sourceItem);
+            jsonput(condObj, "targetItem", targetItem);
+            duplicatePathCheck = "$..conditions[?(@.sourceConditions == '" + conditions + "')]";
+            if (NOT jsonpathcheck(ruleObj, duplicatePathCheck)) { //to know unique sources//Defect #28812 issue5, rule#275 >> 123,  to no of selected items
+                jsonput(condObj, "firstOccurance", true);
+            }
+            //jsonput(condObj ,"isExluded",false);//dummy...will be used in chainRules
+            jsonput(condObj, "isSourceExluded", false); //dummy...will be used in chainRules
+            jsonput(condObj, "isTargetExluded", false); //dummy...will be used in chainRules
+
+            jsonput(condObj, "sourceConditionLevel", "");
+            if (findinarray(rulePathsArr, conditions) <> -1) {
+                jsonput(condObj, "sourceConditionLevel", "Y");
+            }
+            jsonput(condObj, "targetConditionLevel", "");
+            if (findinarray(rulePathsArr, actionCondition) <> -1) {
+                jsonput(condObj, "targetConditionLevel", "Y");
+            }
+
+            sourceArraysetFound = false;
+            targetArraysetFound = false;
+            sourceConditionsArr = split(conditions, ".");
+            ////print "conditions-->"+conditions;
+            condStr = "";
+            condStr2 = "";
+            conditionMet = boolean[];
+            sourceItemarrayset = "";
+
+            for sourceCondition in sourceConditionsArr { //eval the source condition
+
+                found = false;
+                if (condStr == "") {
+                    condStr = sourceCondition;
+                    if (endswith(trim(sourceCondition), "OPTION CLASS")) {
+                        condStr2 = trim(replace(sourceCondition, "OPTION CLASS", ""));
+                    } else {
+                        condStr2 = sourceCondition;
+                    }
+                } else {
+                    condStr = condStr + "." + sourceCondition;
+                    if (endswith(trim(sourceCondition), "OPTION CLASS")) {
+                        condStr2 = condStr2 + "." + trim(replace(sourceCondition, "OPTION CLASS", ""));
+                    } else {
+                        condStr2 = condStr + "." + sourceCondition;
+                    }
+                }
+
+                //AnyTrue ('PC600-RIC'.'PC600-C'.'OC-PC600-AC'.'52710')Excludes AnyTrue ('CONFIGURE EQUIPMENT'.'ADDITIONAL UNIT'.'408300 [1ST ADDITIONAL UNIT]','CONFIGURE EQUIPMENT'.'ADDITIONAL UNIT'.'408300 [2ND ADDITIONAL UNIT]')
+                if (startswith(conditions, baseModel) and findinarray(rulePathsArr, condStr) == -1 and sizeofarray(sourceConditionsArr) > 3) { //genarally we will have 3levels in the condition but here we have 4. So to make it work, removed base model from condition checking.
+                    condStr = replace(condStr, baseModel + ".", "");
+                    condStr2 = replace(condStr, baseModel + ".", "");
+                }
+                ////print ">>>>>>>>>>>>"+sourceCondition;
+                ////print stepNamesArr;
+                ////print rulePathsArr;
+                if (findinarray(stepNamesArr, sourceCondition) <> -1 OR
+                    findinarray(rulePathsArr, condStr) <> -1 OR findinarray(rulePathsArr, condStr2) <> -1) {
+
+                    pos = findinarray(stepNamesArr, sourceCondition);
+
+
+                    arraySet = "";
+                    stepName = "";
+                    if (pos <> -1) {
+                        arraySet = arraysetArr[pos];
+                        //stepName = stepNamesArr[pos];
+                        stepName = displayStepNamesArr[pos];
+                        //jsonput(condObj ,"sourceConditionLevel","Y");
+                    }
+                    pos = findinarray(rulePathsArr, condStr);
+                    if (pos <> -1) {
+                        arraySet = arraysetArr[pos];
+                        stepName = displayStepNamesArr[pos];
+                    }
+                    pos = findinarray(rulePathsArr, condStr2);
+                    if (pos <> -1) {
+                        arraySet = arraysetArr[pos];
+                        stepName = displayStepNamesArr[pos];
+                    }
+                    //--------------SG Added for chaining rules
+                    if (sourceItemarrayset == "" AND arraySet <> "" AND not isnull(arraySet)) {
+                        sourceItemarrayset = arraySet;
+                    }
+                    jsonput(condObj, "sourceAttribute", arraySet);
+                    jsonput(condObj, "sourceStepName", stepName);
+                    jsonput(condObj, "sourceIndex", ""); //dummy		
+                    jsonput(condObj, "sourcePartDescription", stepName);
+                    if (arraySet <> "") { //added as part of qty changes		
+
+                        quantity = jsonpathgetsingle(userSelectionsJSON, "$.attributeAndValues[?(@.arraySet == '" + arraySet + "' && @.item == '" + sourceItem + "')].quantity", "integer", 1);
+                        jsonput(condObj, "quantity", quantity);
+                    }
+                    sourceArraysetFound = true;
+                    ////print "arraySetarraySet";
+                    ////print arraySet;
+
+                    itemPath = "$.." + arraySet + "[?(@.partNumber == '" + sourceItem + "')]";
+                    ItemObjArr = jsonpathgetmultiple(masterStringJSON, itemPath);
+                    if (jsonarraysize(ItemObjArr) == 1 and jsonpathcheck(masterStringJSON, itemPath)) {
+                        ItemObj = jsonarrayget(ItemObjArr, 0, "json");
+                        sourceIndex = jsonget(ItemObj, "index", "string");
+                        sourcePartDescription = jsonget(ItemObj, "partDescription", "string", "");
+                        jsonput(condObj, "sourceIndex", sourceIndex);
+                        jsonput(condObj, "sourcePartDescription", sourcePartDescription);
+                        //found = true;
+
+                        //added on 03-16-2025
+                        if (jsonpathcheck(userSelectionsJSON, "$.attributeAndValues[?(@.arraySet == '" + arraySet + "')]")) {
+                            found = true;
+                        }
+                    }
+                    if (NOT jsonpathcheck(masterStringJSON, itemPath) and arraySet <> "") { //check if atleast one is selected
+
+                        if (jsonpathcheck(userSelectionsJSON, "$.attributeAndValues[?(@.arraySet == '" + arraySet + "')]")) {
+                            found = true;
+
+                        }
+
+                    }
+
+                }
+                ////print configType +"===="+sourceCondition;
+                if (configType == sourceCondition OR findinarray(configTypeArr, sourceCondition) <> -1) { // Defect #26905
+                    found = true;
+                }
+                if (baseModel == sourceCondition) {
+                    found = true;
+                }
+                if (upper(operator) == "EXCLUDES" AND selectedAccount <> "" AND find(UPPER(sourceCondition), "CHOOSE ACCOUNT") <> -1) {
+                    found = true;
+                }
+                ////print itemPath ;
+                itemPos = findinarray(selectedItems, sourceCondition);
+                if (itemPos <> -1) {
+                    found = true;
+                    //sourceArrayset = arraysets[itemPos];
+                }
+                if (findinarray(itemsPathsArr, sourceCondition) <> -1) {
+                    found = true;
+                }
+                append(conditionMet, found);
+
+            }
+            ////print conditionMet;
+            actionConditionsArr = split(actionCondition, ".");
+            actionConditionMet = boolean[];
+            condStr = "";
+
+            for actCondition in actionConditionsArr { //eval the action condition
+
+                found = false;
+                /*if(condStr == ""){
+                	condStr = actCondition;
+                }else{
+                	condStr = condStr + "." + actCondition;
+                }*/
+                if (condStr == "") {
+                    condStr = actCondition;
+                    if (endswith(trim(actCondition), "OPTION CLASS")) {
+                        condStr2 = trim(replace(actCondition, "OPTION CLASS", ""));
+                    } else {
+                        condStr2 = actCondition;
+                    }
+                } else {
+                    condStr = condStr + "." + actCondition;
+                    if (endswith(trim(actCondition), "OPTION CLASS")) {
+                        condStr2 = condStr2 + "." + trim(replace(actCondition, "OPTION CLASS", ""));
+                    } else {
+                        condStr2 = condStr + "." + actCondition;
+                    }
+                }
+                //AnyTrue (IMC3510SD-C.OC-IMC3510SD-CON.419419)Excludes AnyTrue (IMC3510SD-RIC.IMC3510SD-C.OC-IMC3510SD-PCO.413009)//rule 52
+                if (startswith(actionCondition, baseModel) and findinarray(rulePathsArr, condStr) == -1 and sizeofarray(actionConditionsArr) > 3) { //genarally we will have 3levels in the condition but here we have 4. So to make it work, removed base model from condition checking.//defect 34047
+                    condStr = replace(condStr, baseModel + ".", "");
+                    condStr2 = replace(condStr, baseModel + ".", "");
+                }
+                if (findinarray(stepNamesArr, actCondition) <> -1 OR
+                    findinarray(rulePathsArr, condStr) <> -1 OR findinarray(rulePathsArr, condStr2) <> -1) { //link the rule and UI item //defect 34047 added condStr2
+
+                    pos = findinarray(stepNamesArr, actCondition);
+                    arraySet = "";
+                    stepName = "";
+                    if (pos <> -1) {
+                        arraySet = arraysetArr[pos];
+                        stepName = displayStepNamesArr[pos];
+                    }
+                    pos = findinarray(rulePathsArr, condStr);
+                    if (pos <> -1) {
+                        arraySet = arraysetArr[pos];
+                        stepName = displayStepNamesArr[pos];
+                    }
+                    pos = findinarray(rulePathsArr, condStr2); //defect 34047
+                    if (pos <> -1) { //defect 34047
+                        arraySet = arraysetArr[pos];
+                        stepName = displayStepNamesArr[pos];
+                    }
+                    jsonput(condObj, "targetAttribute", arraySet);
+                    jsonput(condObj, "targetStepName", stepName);
+                    jsonput(condObj, "targetIndex", ""); //dummy		
+                    jsonput(condObj, "targetPartDescription", stepName);
+                    if (arraySet <> "") { //added as part of qty changes		
+
+                        quantity = jsonpathgetsingle(userSelectionsJSON, "$.attributeAndValues[?(@.arraySet == '" + arraySet + "' && @.item == '" + targetItem + "')].quantity", "integer", 1);
+                        jsonput(condObj, "quantity", quantity);
+                    }
+                    targetArraysetFound = true;
+                    itemPath = "$.." + arraySet + "[?(@.partNumber == '" + targetItem + "')]";
+                    ItemObjArr = jsonpathgetmultiple(masterStringJSON, itemPath);
+                    if (jsonarraysize(ItemObjArr) == 1 and jsonpathcheck(masterStringJSON, itemPath)) {
+                        ItemObj = jsonarrayget(ItemObjArr, 0, "json");
+                        targetIndex = jsonget(ItemObj, "index");
+                        targetPartDescription = jsonget(ItemObj, "partDescription", "string", "");
+                        jsonput(condObj, "targetIndex", targetIndex);
+                        jsonput(condObj, "targetPartDescription", targetPartDescription);
+                        found = true;
+
+                    }
+                    if (NOT jsonpathcheck(masterStringJSON, itemPath) and arraySet <> "") { //check if atleast one is selected
+
+                        if (jsonpathcheck(userSelectionsJSON, "$.attributeAndValues[?(@.arraySet == '" + arraySet + "')]")) {
+                            found = true;
+
+                        }
+
+                    }
+                }
+                if (configType == actCondition OR findinarray(configTypeArr, actCondition) <> -1) { // Defect #26905
+                    found = true;
+                }
+                if (baseModel == actCondition) {
+                    found = true;
+                }
+                if (upper(operator) == "EXCLUDES" AND selectedAccount <> "" AND find(UPPER(actCondition), "CHOOSE ACCOUNT") <> -1) {
+                    found = true;
+                }
+                ////print itemPath ;
+                itemPos = findinarray(selectedItems, actCondition);
+                if (itemPos <> -1) {
+                    found = true;
+                    //sourceArrayset = arraysets[itemPos];
+                }
+                if (findinarray(itemsPathsArr, actCondition) <> -1) {
+                    found = true;
+                }
+                //SG added for chaing rules test
+                overridepath = "$.attributeAndValues[?(@.arraySet == '" + sourceItemarrayset + "' && @.item == '" + sourceItem + "' && @.Override=='true')]";
+                if (jsonpathcheck(userSelectionsJSON, overridepath)) {
+                    found = false;
+                }
+                append(actionConditionMet, found);
+            }
+
+            ////print ">>>>>>hereeee>>>>>>>>>>"+string(sourceArraysetFound)+"---"+string(targetArraysetFound);
+            //if(Not sourceArraysetFound and  targetArraysetFound){
+            //find(conditions,".")==-1
+            if (Not sourceArraysetFound AND find(conditions, ".") == -1) { //IM430F-RF Rule id 5 not triggred as index is not found
+                //itemPath = "$..[?(@.partNumber == '"+sourceItem+"')]";//actual
+                itemPath = "$..[?(@.partNumber == '" + sourceItem + "')]";
+                //itemPath = "$..[?((@.partNumber == '"+sourceItem+"') && ( @.stepName  =~ /.*"+conditions+".*/ ) )]";
+                /*ItemObjArr = jsonpathgetmultiple(masterStringJSON,itemPath );
+                ItemObjArrRange = range(jsonarraysize(ItemObjArr));
+                if(jsonarraysize(ItemObjArr) > 1){
+                for everyStep in ItemObjArrRange{
+                	if(findinarray(sourceConditionsArr, jsonget(json(jsonarrayget(ItemObjArr,everyStep)),"stepName")) <> -1 ){
+                		itemPath = "$..[?((@.partNumber == '"+sourceItem+"') && ( @.stepName  == '"+jsonget(json(jsonarrayget(ItemObjArr,everyStep)),"stepName")+"' ) )]";
+                		break;
+                	}
+                }
+                }*/
+                ItemObjArr = jsonpathgetmultiple(masterStringJSON, itemPath);
+                if (jsonarraysize(ItemObjArr) == 1 and jsonpathcheck(masterStringJSON, itemPath)) { //link the rule and UI item
+                    ItemObj = jsonarrayget(ItemObjArr, 0, "json");
+                    attributeName = jsonget(ItemObj, "attributeName", "string"); //IM430F-RF Rule id 5 not triggred as arrayset is not found
+                    arraySet = jsonget(ItemObj, "arraysetName", "string", attributeName);
+                    stepName = jsonget(ItemObj, "displayStepName", "string");
+                    sourceIndex = jsonget(ItemObj, "index", "string");
+                    sourcePartDescription = jsonget(ItemObj, "partDescription", "string", "");
+                    jsonput(condObj, "sourceIndex", sourceIndex);
+                    jsonput(condObj, "sourceAttribute", arraySet);
+                    jsonput(condObj, "sourceStepName", stepName);
+                    jsonput(condObj, "sourcePartDescription", sourcePartDescription);
+
+                    if (arraySet <> "") { //added as part of qty changes		
+
+                        quantity = jsonpathgetsingle(userSelectionsJSON, "$.attributeAndValues[?(@.arraySet == '" + arraySet + "' && @.item == '" + sourceItem + "')].quantity", "integer", 1);
+                        jsonput(condObj, "quantity", quantity);
+                    }
+
+                } else {
+
+                    print "something went wrong source#" + sourceItem;
+                }
+
+            }
+            //if(sourceArraysetFound and NOT targetArraysetFound){//link the rule and UI item
+            //AND find(actionCondition,".")==-1
+            if (NOT targetArraysetFound AND find(actionCondition, ".") == -1) { //link the rule and UI item//IM430F-RF Rule id 5 not triggred as index is not found
+                itemPath = "$..[?(@.partNumber == '" + targetItem + "')]";
+                ItemObjArr = jsonpathgetmultiple(masterStringJSON, itemPath);
+                ItemObjArr = jsonpathgetmultiple(masterStringJSON, itemPath);
+                ItemObjArrRange = range(jsonarraysize(ItemObjArr));
+                if (jsonarraysize(ItemObjArr) > 1) {
+                    for everyStep in ItemObjArrRange {
+                        if (findinarray(sourceConditionsArr, jsonget(json(jsonarrayget(ItemObjArr, everyStep)), "stepName")) <> -1) {
+                            itemPath = "$..[?((@.partNumber == '" + targetItem + "') && ( @.stepName  == '" + jsonget(json(jsonarrayget(ItemObjArr, everyStep)), "stepName") + "' ) )]";
+                            break;
+                        }
+                    }
+                }
+                if (jsonarraysize(ItemObjArr) == 1 and jsonpathcheck(masterStringJSON, itemPath)) {
+                    ItemObj = jsonarrayget(ItemObjArr, 0, "json");
+                    attributeName = jsonget(ItemObj, "attributeName", "string"); //IM430F-RF Rule id 5 not triggred as arrayset is not found
+                    arraySet = jsonget(ItemObj, "arraysetName", "string", attributeName);
+                    stepName = jsonget(ItemObj, "displayStepName", "string");
+                    targetPartDescription = jsonget(ItemObj, "partDescription", "string", "");
+                    targetIndex = jsonget(ItemObj, "index");
+                    jsonput(condObj, "targetIndex", targetIndex);
+                    jsonput(condObj, "targetAttribute", arraySet);
+                    jsonput(condObj, "targetStepName", stepName);
+                    jsonput(condObj, "targetPartDescription", targetPartDescription);
+
+                    if (arraySet <> "") { //added as part of qty changes		
+
+                        quantity = jsonpathgetsingle(userSelectionsJSON, "$.attributeAndValues[?(@.arraySet == '" + arraySet + "' && @.item == '" + targetItem + "')].quantity", "integer", 1);
+                        jsonput(condObj, "quantity", quantity);
+                    }
+                } else {
+                    print "something went wrong target#" + ruleID + "---" + targetItem;
+                }
+            }
+            sourceAttribute = jsonget(condObj, "sourceAttribute", "string", "");
+            targetAttribute = jsonget(condObj, "targetAttribute", "string", "");
+            selectedSourceAttribute = "";
+            selectedTargetAttribute = "";
+            selectedSourcePathArr = jsonpathgetmultiple(userSelectionsJSON, "$.attributeAndValues[?( @.item == '" + sourceItem + "' || (@.optionFeature == '" + conditions + "' && @.arraySet != '' ))].arraySet"); //07-20 defect #35731 in json filter added && @.arraySet != ''
+            if (jsonarraysize(selectedSourcePathArr) <> 0) {
+                selectedSourceAttribute = jsonarrayget(selectedSourcePathArr, 0);
+            }
+            selectedTargetPathArr = jsonpathgetmultiple(userSelectionsJSON, "$.attributeAndValues[?( @.item == '" + targetItem + "' || (@.optionFeature == '" + actionCondition + "' && @.arraySet != '' ))].arraySet"); //07-20 defect #35731 in json filter added && @.arraySet != ''
+            if (jsonarraysize(selectedTargetPathArr) <> 0) {
+                selectedTargetAttribute = jsonarrayget(selectedTargetPathArr, 0);
+            }
+            sourcePathMatched = false;
+            if (sourceAttribute <> "" and selectedSourceAttribute <> "" and sourceAttribute == selectedSourceAttribute) {
+                sourcePathMatched = true;
+            }
+            targetPathMatched = false;
+            if (targetAttribute <> "" and selectedTargetAttribute <> "" and targetAttribute == selectedTargetAttribute) {
+                targetPathMatched = true;
+            }
+            /*print sourceAttribute ;
+            print selectedSourceAttribute ;
+            print targetAttribute ;
+            print selectedTargetAttribute;
+            print targetItem;
+            */
+            if ((findinarray(selectedItems, sourceItem) <> -1 AND sourcePathMatched) OR
+                (findinarray(selectedItems, targetItem) <> -1 and targetPathMatched) OR
+                findinarray(optionFeatures, sourceItem) <> -1 OR
+                findinarray(optionFeatures, targetItem) <> -1 OR
+                (upper(operator) == "EXCLUDES" AND selectedAccount <> "" AND find(UPPER(sourceItem), "CHOOSE ACCOUNT") <> -1) OR
+                (upper(operator) == "EXCLUDES" AND selectedAccount <> "" AND find(UPPER(targetItem), "CHOOSE ACCOUNT") <> -1)
+            ) {
+                jsonput(ruleObj, "executeRule", true);
+            }
+            sourceItemSelected = (findinarray(conditionMet, false) == -1);
+            targetItemSelected = (findinarray(actionConditionMet, false) == -1);
+
+
+            jsonput(condObj, "sourceConditionMet", sourceItemSelected);
+            jsonput(condObj, "targetConditionMet", targetItemSelected);
+            //jsonput(condObj ,"sourceIndex",sourceIndex);
+            //jsonput(condObj ,"targetIndex",targetIndex);
+
+            jsonput(condObj, "multiplier", multiplier);
+            //jsonput(condObj ,"sourceAttribute",sourceAttribute);
+            //jsonput(condObj ,"targetAttribute",targetAttribute);
+            //jsonput(condObj ,"sourceValue",sourceAttributeValue);
+            //jsonput(condObj ,"sourceStepName",sourceStepName);
+            //jsonput(condObj ,"sourcePartDescription",sourcePartDescription);
+            //jsonput(condObj ,"targetStepName",targetStepName);
+            //jsonput(condObj ,"targetPartDescription",targetPartDescription);
+            //if(upper(functionName) == "CONTRIBUTE"){
+            if (upper(functionName) == "CONTRIBUTE" and (sourceItem == targetItem)) {
+                contributeRule = json();
+                jsonput(contributeRule, "ruleId", ruleId);
+                jsonput(contributeRule, "sourceConditions", conditions);
+                jsonput(contributeRule, "actionConditions", actionCondition);
+                jsonarrayappend(contributeRulesArr, contributeRule);
+            }
+            //if(upper(functionName) == "CONTRIBUTE"  and findinarray(conditionMet,false) == -1){//prepare BOM 
+            if (upper(functionName) == "CONTRIBUTE" and (sourceItem == targetItem) and findinarray(conditionMet, false) == -1) {
+
+                bomKey = targetItem + "#" + actionCondition;
+                if (findinarray(duplicateBOMItems, bomKey) == -1) {
+                    bomItem = json();
+                    jsonput(bomItem, "appliedRuleId", ruleId);
+                    jsonput(bomItem, "partNumber", targetItem);
+                    jsonput(bomItem, "itemPath", actionCondition);
+                    if (isnumber(multiplier)) {
+                        jsonput(bomItem, "quantity", multiplier);
+                    } else {
+                        jsonput(bomItem, "quantity", 1);
+                    }
+
+                    jsonarrayappend(bomItemsArray, bomItem);
+                    append(duplicateBOMItems, bomKey);
+                }
+                continue;
+
+            }
+            jsonarrayappend(condArr, condObj);
+            jsonput(ruleObj, "conditions", condArr);
+            jsonput(rulesData, ruleID, ruleObj);
+            sourceIndex = jsonget(condObj, "sourceIndex", "string", "");
+            targetIndex = jsonget(condObj, "targetIndex", "string", "");
+            isSourceStepLevel = jsonget(condObj, "sourceConditionLevel", "string", "") == "Y";
+            isTargetStepLevel = jsonget(condObj, "sourceConditionLevel", "string", "") == "Y";
+            if (upper(functionName) <> "CONTRIBUTE" and
+                ((sourceIndex <> "" and targetIndex <> "") or
+                    (sourceIndex == "" and isSourceStepLevel and targetIndex <> "") or
+                    (sourceIndex <> "" and targetIndex == "" and isTargetStepLevel) or
+                    (sourceIndex == "" and isSourceStepLevel and targetIndex == "" and isTargetStepLevel)
+                )
+
+            ) { //prapare plain structure to check the chaining//Issue#89, stop inactive item related rules example IMC6010UPS - 419401
+                relatedRuleJSON = json();
+                jsonput(relatedRuleJSON, "ruleId", ruleId);
+                jsonput(relatedRuleJSON, "conditionId", condID);
+                jsonput(relatedRuleJSON, "sourceItem", sourceItem);
+                jsonput(relatedRuleJSON, "sourceConditions", conditions); //A = B, B = C, C= D, E=F
+                jsonput(relatedRuleJSON, "operator", upper(operator));
+                jsonput(relatedRuleJSON, "targetItem", targetItem);
+                jsonput(relatedRuleJSON, "sourceSelected", sourceItemSelected);
+                jsonput(relatedRuleJSON, "targetSelected", targetItemSelected);
+                jsonput(relatedRuleJSON, "sourceSelectedInUI", sourceItemSelected);
+                jsonput(relatedRuleJSON, "targetSelectedInUI", targetItemSelected);
+                jsonput(relatedRuleJSON, "actionConditions", actionCondition);
+                jsonput(relatedRuleJSON, "noOfConditions", jsonarraysize(condArr));
+                jsonput(relatedRuleJSON, "sourceItems", "");
+                jsonput(relatedRuleJSON, "targetItems", "");
+                //jsonput(relatedRuleJSON,"isExluded",false);
+                jsonput(relatedRuleJSON, "isSourceExluded", false);
+                jsonput(relatedRuleJSON, "isTargetExluded", false);
+                jsonput(relatedRuleJSON, "Visited", false); //Defect#46 performance issue	
+                jsonput(relatedRuleJSON, "functionName", upper(functionName));
+                jsonput(relatedRuleJSON, "actionFunction", upper(actionFunction));
+                jsonput(relatedRuleJSON, "defaultRule", defaultRule); //03/02/2026  added for C014
+                jsonarrayappend(relationshipJSONArray, relatedRuleJSON);
+            }
+            //jsonput(relationshipJSON,"relatedRules",relationshipJSONArray);
+
+        }
+    }
+    jsonput(relationshipJSON, "relatedRules", relationshipJSONArray);
+    jsonput(contributeRulesObj, "contributeRules", contributeRulesArr);
+    /*end of querying the rules*/
+    //--> Direct rules unselection --start
+    unselection_json = json();
+    unselectedrules = string[];
+    if (NOT override_flag) {
+        unselection_json = json(util.autoUnselectRules(userSelections, jsontostr(rulesData), constraintAndRecString, masterString, otherParams));
+        autodeselectjsarray = jsonarray(jsonget(unselection_json, "unselected_rules"));
+
+    }
+    if (jsonarraysize(autodeselectjsarray) > 0) {
+        unselectedrules11 = (jsonpathgetmultiple(unselection_json, "$..appliedRuleId"));
+        indexes = range(jsonarraysize(unselectedrules11));
+        tempdict = dict("string");
+        for jj in indexes {
+            put(tempdict, jsonarrayget(unselectedrules11, jj), "");
+        }
+        unselectedrules = keys(tempdict);
+    }
+    ////print "---------";
+    ////print unselectedrules;
+    //--> Direct rules unselection --END
+    endTime = getcurrenttimeinmillis();
+    logTime(modelName + logComments + "Rules New - Query", endTime - startTime);
+    startTime = getcurrenttimeinmillis();
+    ////print ">>>>>>>rulsss>>>>>>>>>>";
+    //print rulesData ;
+    /*//print rulesData ;
+    if(true){
+    	return results;
+    }*/
+    defaultsAndMessages = json();
+    //rulesArr = jsonkeys(rulesData);
+    rulesJSONArr = jsonpathgetmultiple(rulesData, "$..[?(@.executeRule == true)].ruleId");
+    indexes = range(jsonarraysize(rulesJSONArr));
+    ////print rulesJSONArr;
+    messagesJSON = json();
+    unSelOverrideMsgs = json(); //28950
+    direct_warning_messages_json = json();
+    Final_warning_messages_json = json();
+    chainRuleIds = string[];
+    ToBeAppliedRuleIds = string[];
+    /*Evaluate the direct Rules*/
+    //for ruleId in rulesArr{
+    //print unselectedrules;
+    for ruleIndx in indexes {
+        ruleId = jsonarrayget(rulesJSONArr, ruleIndx, "string");
+        //if(ruleId <> "110" ){continue;}  
+        if (findinarray(unselectedrules, ruleId) <> -1) // added on 10/22/2025 to bypass the rule if it was part of unselection
+        {
+            continue;
+        }
+        ruleObj = jsonget(rulesData, ruleId, "json", json());
+        executeRule = jsonget(ruleObj, "executeRule", "boolean", false);
+        functionName = jsonget(ruleObj, "functionName", "string");
+        actionFunctionName = jsonget(ruleObj, "actionFunctionName", "string");
+        operator = jsonget(ruleObj, "operator", "string");
+        ErrorMessage = jsonget(ruleObj, "ErrorMessage", "string", "");
+        conditionsArr = jsonget(ruleObj, "conditions", "jsonarray", jsonarray());
+        defaultRule = jsonget(ruleObj, "defaultRule", "string", ""); //03/02/2026 added for C014
+        indexes = range(jsonarraysize(conditionsArr));
+        sourceConditionMetArr = boolean[];
+        targetConditionMetArr = boolean[];
+        sourceAttribute = "";
+        targetAttribute = "";
+        sourceIndex = "";
+        targetIndex = "";
+        //itemsForMessage = stringbuilder();
+        targetItems = string[];
+        sourceItems = string[];
+        startTime11 = getcurrenttimeinmillis();
+        selectedItemCount = 0;
+        targetselectedItemCount = 0;
+        for i in indexes {
+            conditionObj = jsonarrayget(conditionsArr, i, "json");
+            conditionMet = jsonget(conditionObj, "sourceConditionMet", "boolean", false);
+            condID = jsonget(conditionObj, "conditionId", "string"); //ST 08JAN2026 for combination rules
+            targetConditionMet = jsonget(conditionObj, "targetConditionMet", "boolean", false);
+            sourceItem = jsonget(conditionObj, "sourceItem", "string");
+            targetItem = jsonget(conditionObj, "targetItem", "string");
+            isSourceExluded = jsonget(conditionObj, "isSourceExluded", "boolean", false);
+            if (conditionMet and isSourceExluded) { ////ST 08JAN2026 for combination rules - since item was excluded through other rules consider as not selected
+                conditionMet = false;
+                jsonpathset(relationshipJSON, "$..relatedRules[?(@.ruleId == '" + ruleId + "' && @.conditionId == '" + condID + "')].sourceSelected", false); //Defect#46 performance issue
+                jsonpathset(rulesData, "$." + ruleId + ".conditions[?(@.conditionId == '" + condID + "')].sourceConditionMet", false);
+
+            }
+            /*sourceAttribute = jsonget(conditionObj ,"sourceAttribute","string");
+            targetAttribute = jsonget(conditionObj ,"targetAttribute","string");		
+            sourceIndex = jsonget(conditionObj ,"sourceIndex","string");
+            targetIndex = jsonget(conditionObj ,"targetIndex","string");
+            */
+
+            append(sourceConditionMetArr, conditionMet);
+            append(targetConditionMetArr, targetConditionMet);
+
+            /*targetItemObj = json();//jsonpathgetsingle(masterStringJSON,"$..[?(@.partNumber == '"+targetItem+"')]","json",json());
+            stepName = jsonget(targetItemObj,"stepName");
+            itemDesc = jsonget(targetItemObj,"partDescription");
+            */
+            //stepName = jsonget(conditionObj ,"targetStepName","string");
+            //itemDesc = jsonget(conditionObj ,"targetPartDescription","string");
+            //if(i > 0){
+            //sbappend(itemsForMessage,"<br>");
+            ///}
+            //sbappend(itemsForMessage, stepName,":",itemDesc);
+
+            if (findinarray(sourceItems, sourceItem) == -1) {
+                append(sourceItems, sourceItem);
+                if (conditionMet) {
+                    selectedItemCount = selectedItemCount + 1;
+                }
+            }
+            if (findinarray(targetItems, targetItem) == -1) {
+                append(targetItems, targetItem);
+                //---------sriniadded 0914--start
+                if (targetConditionMet) {
+                    targetselectedItemCount = targetselectedItemCount + 1;
+                }
+                //---------sriniadded 0914--end
+            }
+
+        }
+        /*if(ruleId == "2"){
+        	print "source condition array: ";
+        	print sourceConditionMetArr;
+        }*/
+        endTime11 = getcurrenttimeinmillis();
+        //logTime("Rules New - Eval First lopp",endTime11-startTime11);
+        startTime11 = getcurrenttimeinmillis();
+        /*if(upper(functionName) <>  "CONTRIBUTE"){
+        	jsonpathset(relationshipJSON,"$..relatedRules[?(@.ruleId == '"+ruleID+"')].sourceItems",join(sourceItems,"#"));
+        	jsonpathset(relationshipJSON,"$..relatedRules[?(@.ruleId == '"+ruleID+"')].targetItems",join(targetItems,"#"));
+        	//jsonpathset(relationshipJSON,"$..relatedRules[?(@.ruleId == '"+ruleID+"')].targetItems",join(targetItems,"#"));
+
+        }*/
+        if (NOT executeRule) {
+            continue;
+        }
+        message = stringbuilder();
+        sourceConditionMet = false;
+        targetConditionMet = false;
+        ////print targetConditionMetArr;
+        if (functionName == "CONTRIBUTE" and findinarray(sourceConditionMetArr, true) <> -1) {
+            sourceConditionMet = true;
+
+        }
+        if (functionName == "CONTRIBUTE" and findinarray(targetConditionMetArr, true) <> -1) {
+            targetConditionMet = true;
+
+        }
+        if (functionName == "ANYTRUE" and findinarray(sourceConditionMetArr, true) <> -1) {
+            sourceConditionMet = true;
+            if (ruleId == "2") {
+                print "rule passed here";
+            }
+            //sbappend(message,"Please select one of the items(",itemsForMessage,")");
+        }
+        if (functionName == "ALLTRUE" and findinarray(sourceConditionMetArr, false) == -1) {
+            sourceConditionMet = true;
+        }
+        if (actionFunctionName == "ANYTRUE" and findinarray(targetConditionMetArr, true) <> -1) {
+            targetConditionMet = true;
+        }
+        if (actionFunctionName == "ALLTRUE" and findinarray(targetConditionMetArr, false) == -1) {
+            targetConditionMet = true;
+        }
+        conditionMet = false;
+        if (sourceConditionMet and targetConditionMet) {
+            conditionMet = true;
+        }
+        targetItems_size = sizeofarray(targetItems);
+        sourceItems_size = sizeofarray(sourceItems);
+        messagesArr = string[];
+        for i in indexes {
+            conditionObj = jsonarrayget(conditionsArr, i, "json");
+
+            ////print conditionObj ;
+            condID = jsonget(conditionObj, "conditionId", "string");
+            sourceIndex = jsonget(conditionObj, "sourceIndex", "string");
+            targetIndex = jsonget(conditionObj, "targetIndex", "string");
+            sourceItem = jsonget(conditionObj, "sourceItem", "string");
+            targetItem = jsonget(conditionObj, "targetItem", "string");
+            target_check_item = jsonget(conditionObj, "targetItem", "string", "");
+            sourceAttribute = jsonget(conditionObj, "sourceAttribute", "string");
+            targetAttribute = jsonget(conditionObj, "targetAttribute", "string");
+            //checking in unselection rules array to ignore
+            unselectionpath = "$..unselected_rules[?((@.targetAttribute == '" + sourceAttribute + "' && @.targetIndex =='" + sourceIndex + "'))]";
+            if (jsonpathcheck(unselection_json, unselectionpath) AND mainunit_arrayset <> targetAttribute AND sourceIndex <> "" AND NOT ISnull(sourceIndex)) {
+                continue;
+            }
+            // added for 28110 to ignore main unit rule if main unit is target
+            if (mainunit_arrayset == targetAttribute) {
+                continue;
+            }
+            sourceCondition = jsonget(conditionObj, "sourceConditions", "string");
+            actionCondition = jsonget(conditionObj, "actionConditions", "string");
+            multiplier = jsonget(conditionObj, "multiplier", "string");
+            sourceSelected = jsonget(conditionObj, "sourceConditionMet", "boolean", false);
+            targetSelected = jsonget(conditionObj, "targetConditionMet", "boolean", false);
+            ////print conditionMet ;
+            ////print operator ;
+            ////print actionFunctionName ;
+            ////print targetItems;
+            ////print targetConditionMet ;
+            recommendations = jsonget(defaultsAndMessages, "recommendations", "jsonarray", jsonarray());
+            sourceItemFound = jsonpathcheck(masterStringJSON, "$..[?(@.partNumber == '" + sourceItem + "')]");
+            targetItemFound = jsonpathcheck(masterStringJSON, "$..[?(@.partNumber == '" + targetItem + "')]");
+            setRec = false;
+            setType = "set";
+            value = true;
+            applySourceSelection = false;
+            applyTargetSelection = false;
+            applyTargetExclusion = false;
+            applySourceExclusion = false;
+            showMessage = false;
+            combination_rule = false;
+            //added for default rule behaviour ticket 28110---start
+            default_ovveride_check = false;
+            default_ovveride_path = jsonpathcheck(constraintAndRecStringJson, "$.defaultsAndMessages.recommendations[?(@.appliedRuleId =='" + ruleId + "')]");
+            //if(default_ovveride_path AND operator == "DEFAULTS")
+            if (default_ovveride_path AND operator == "DEFAULTS" AND targetItemFound == true) {
+                unselectionpath_traget = "$..unselected_rules[?((@.targetAttribute == '" + targetAttribute + "' && @.targetIndex =='" + targetIndex + "'))]";
+                if (targetSelected == false OR jsonpathcheck(unselection_json, unselectionpath_traget)) {
+                    default_ovveride_check = true;
+                }
+            }
+            if (default_ovveride_check == false AND operator == "DEFAULTS") {
+                if (sourceConditionMet and sourceSelected and (sizeofarray(targetItems) == 1)) {
+                    applyTargetSelection = true;
+                } elif (sourceConditionMet and sourceSelected) {
+                    applyTargetSelection = true;
+                }
+            }
+            //-----------------end	
+
+            //if((operator == "IMPLIES" OR operator == "REQUIRES" ) and sourceConditionMet and sourceSelected and (sizeofarray(targetItems) == 1)){
+            if ((operator == "IMPLIES" OR operator == "REQUIRES" OR (operator == "TO" and (sourceItem <> targetItem))) and sourceConditionMet and sourceSelected and (sizeofarray(targetItems) == 1)) {
+                applyTargetSelection = true;
+            } elif (((operator == "IMPLIES" AND actionFunctionName == "ALLTRUE")) and sourceConditionMet and sourceSelected) {
+                applyTargetSelection = true;
+            } elif (operator == "REQUIRES" and targetConditionMet and targetSelected and not sourceConditionMet) {
+                applySourceSelection = true;
+            } elif (operator == "IMPLIES" and sourceConditionMet and sourceSelected and not targetConditionMet and sizeofarray(targetItems) > 1 and actionFunctionName == "ANYTRUE") {
+                /*if(n-1 are excluded){
+                	auto select the non excluded item
+                }elif(not targetConditionMet){
+                	Show message
+                }*/
+                showMessage = true;
+            } elif (operator == "IMPLIES" and sourceConditionMet and sourceSelected and sizeofarray(targetItems) > 1 and actionFunctionName == "ALLTRUE") {
+                applyTargetSelection = true;
+            } elif (operator == "EXCLUDES" and functionName == "ANYTRUE" and sourceConditionMet and sourceSelected and actionFunctionName == "ANYTRUE") {
+
+                //if(ruleId == "2"){
+                //print "Condition Satisfied";
+                //}
+                applyTargetExclusion = true;
+            } elif (operator == "EXCLUDES" and functionName == "ANYTRUE" and targetConditionMet and targetSelected and actionFunctionName == "ANYTRUE") {
+                applySourceExclusion = true;
+            } elif (operator == "EXCLUDES" and functionName == "ALLTRUE" and sourceConditionMet and sourceSelected and actionFunctionName == "ANYTRUE") {
+                applyTargetExclusion = true;
+                if (sizeofarray(sourceItems) > 1 and sizeofarray(targetItems) > 1) {
+                    combination_rule = true;
+                }
+            } elif (operator == "EXCLUDES" and functionName == "ALLTRUE" and targetConditionMet and targetSelected and actionFunctionName == "ANYTRUE") {
+                /*sourcestr_path="$."+ruleId+".sourceItems";
+                if(jsonpathcheck(rulesData,sourcestr_path))
+                {
+                	sourcestr=jsonpathgetsingle(rulesData,sourcestr_path,"string","");				
+                	source_arr=split(sourcestr,"#");
+                	if(sizeofarray(source_arr)==1)
+                	{
+                	   applySourceExclusion = true;//AllTrue(A) Excludes AnyTrue(C,D)--> when c od selected A needs to excluded
+                	}
+                }*/
+                //print "herrrrr"+ruleId;
+                //print sizeofarray(sourceItems);
+                //print selectedItemCount ;
+                //print sourceSelected;
+                if (sizeofarray(sourceItems) > 1 and sizeofarray(targetItems) > 1) {
+                    combination_rule = true;
+                }
+                if ((sizeofarray(sourceItems) - 1) == selectedItemCount and Not sourceSelected) { ////Defect #28546 rule#5, When any 2 Paper Feed Units are selected, 52006, TALL CABINET TYPE Q should be excluded, but is not happening in CPQ. if n-1 are selected, and any target item was already selected then excluded remaining one source item
+                    applySourceExclusion = true;
+                    //print "blank";
+                }
+                if (sizeofarray(sourceItems) == 1) {
+                    applySourceExclusion = true; //AllTrue(A) Excludes AnyTrue(C,D)--> when c od selected A needs to excluded
+                }
+                //applySourceExclusion = true;//AllTrue(A,B) Excludes AnyTrue(C,D)
+                print "When C or/and D excluded A Will be available for selection";
+            } elif (operator == "EXCLUDES" and functionName == "ANYTRUE" and sourceConditionMet and sourceSelected and actionFunctionName == "ALLTRUE") {
+                //applyTargetExclusion = true; Srini commented on 0914
+                //---------------
+                //srini added on 0914------start 
+                targetItems_size = sizeofarray(targetItems);
+                if ((targetItems_size == 1 or (targetItems_size > 1 and targetItems_size - 1 == targetselectedItemCount)) and not(targetSelected) and findinarray(selectedItems, targetItem) == -1) {
+                    applyTargetExclusion = true;
+                }
+            }
+
+            //srini added on 0914------end
+            elif (operator == "EXCLUDES" and functionName == "ANYTRUE" and targetConditionMet and targetSelected and actionFunctionName == "ALLTRUE") {
+                // previously applySourceExclusion is comment for rule id 232 of  IMC2510 model is uncommented
+                //applySourceExclusion = true;
+                if (targetselectedItemCount == targetItems_size) {
+                    applySourceExclusion = true;
+                }
+                print "No action required";
+            } elif (operator == "EXCLUDES" and functionName == "ALLTRUE" and sourceConditionMet and sourceSelected and actionFunctionName == "ALLTRUE") {
+                //applyTargetExclusion = true;
+                targetItems_size = sizeofarray(targetItems);
+                if (((targetItems_size == 1 or (targetItems_size > 1 and targetItems_size - 1 == targetselectedItemCount)) and not(targetSelected) and findinarray(selectedItems, targetItem) == -1)) {
+                    applyTargetExclusion = true;
+                }
+            } elif (operator == "EXCLUDES" and functionName == "ALLTRUE" and targetConditionMet and targetSelected and actionFunctionName == "ALLTRUE") {
+                //applySourceExclusion = true;
+                if ((targetselectedItemCount == targetItems_size) and (sourceItems_size == 1 or sourceItems_size - 1 == selectedItemCount) and not(sourceSelected) and findinarray(selectedItems, sourceItem) == -1) {
+                    applySourceExclusion = true;
+                }
+                print "No action required";
+            }
+
+            if (applySourceExclusion or applyTargetExclusion) {
+                setType = "forceSet";
+                value = false;
+                setRec = true;
+            }
+            if (applyTargetSelection) {
+                setType = "set";
+                value = true;
+                setRec = true;
+            }
+            if (default_ovveride_check) {
+                setType = "set";
+                value = false;
+                setRec = true;
+            }
+            //print "setRecsetRecsetRec";
+            ////print operator ;
+            //print sourceConditionMet ;
+            ////print targetConditionMet ;
+            ////print targetSelected ;
+
+            ////print functionName ;
+            ////print actionFunctionName ;
+            ////print setRec;
+            ////print "----------------------";
+
+            if (setRec) {
+                //print "==============="+ruleId;
+                //print applySourceExclusion ;
+                //print applyTargetExclusion;
+                if ((isnull(targetIndex) OR targetIndex == "") and NOT isnull(targetAttribute) and (targetAttribute <> "") and jsonpathcheck(masterStringJSON, "$." + targetAttribute)) {
+
+                    ////print "insideeeeeee";
+                    itemsJsonArr = jsonpathgetsingle(masterStringJSON, "$." + targetAttribute, "jsonarray", jsonarray());
+                    ////print itemsJsonArr ;
+                    if (jsonarraysize(itemsJsonArr) <= 1 and find(actionCondition, ".") == -1) { //Defect 30208, added find condition
+                        targetIndex = "0";
+                    }
+                }
+                if (operator == "EXCLUDES" and isnull(targetAttribute) and findinarray(stepNamesArr, actionCondition) == -1 and actionCondition <> "CHOOSE ACCOUNT") { //IMC4510 rule#92 dont run bundle rule for regular model vice versa.
+
+                    continue;
+                }
+                if (operator == "EXCLUDES" and isnull(sourceAttribute) and findinarray(stepNamesArr, sourceCondition) == -1 and sourceCondition <> "CHOOSE ACCOUNT") { //IMC4510 rule#92 dont run regular model rules for bundle vice versa.
+
+                    continue;
+                }
+                if (isnull(targetAttribute) or targetAttribute == "null") {
+
+                    targetAttribute = "";
+                }
+                if (isnull(sourceAttribute) or sourceAttribute == "null") {
+                    sourceAttribute = "";
+                }
+                recommendations = jsonget(defaultsAndMessages, "recommendations", "jsonarray", jsonarray());
+                if (findinarray(chainRuleIds, ruleId) == -1) {
+                    append(chainRuleIds, ruleId);
+                    append(ToBeAppliedRuleIds, ruleID);
+                }
+                recommendation = json();
+                jsonput(recommendation, "appliedRuleId", ruleId);
+                jsonput(recommendation, "operator", operator);
+                jsonput(recommendation, "functionName", functionName);
+                jsonput(recommendation, "actionFunctionName", actionFunctionName);
+                jsonput(recommendation, "setType", setType);
+                jsonput(recommendation, "value", value);
+                jsonput(recommendation, "sourceIndex", sourceIndex);
+                jsonput(recommendation, "targetIndex", targetIndex);
+                jsonput(recommendation, "sourceAttribute", sourceAttribute);
+                jsonput(recommendation, "targetAttribute", targetAttribute);
+                jsonput(recommendation, "sourceConditions", sourceCondition);
+                jsonput(recommendation, "actionConditions", actionCondition);
+                jsonput(recommendation, "defaultRule", defaultRule); //03/02/2026 added for C014
+                jsonput(recommendation, "combination_rule", combination_rule);
+                //checking in unselection rules array to ignore
+                if (applyTargetSelection and NOT Isnull(targetIndex) and targetIndex <> "") {
+                    //Anytrue(A) implies Anytrue(C)
+                    //Anytrue(B) implies Anytrue(C) // C Deselected but should be set to true again because A is still selected
+                    setPath = "$..unselected_rules[?((@.targetAttribute == '" + targetAttribute + "' && @.targetIndex =='" + targetIndex + "'))].value";
+                    setImpactRulePath = "$..unselected_rules[?((@.targetAttribute == '" + targetAttribute + "' && @.targetIndex =='" + targetIndex + "'))].ImpactedByRuleId";
+                    if (jsonpathcheck(unselection_json, setPath)) {
+                        jsonpathset(unselection_json, setImpactRulePath, ruleId);
+                    }
+                }
+
+                //Added on 01-19-2026--> to restore the chain rule path which is used for unselction
+                chainrulepath = "$.defaultsAndMessages.recommendations[?(@.appliedRuleId == '" + ruleID + "'&& @.targetIndex == '" + targetIndex + "' && @.targetAttribute == '" + targetAttribute + "')].chainRule";
+                if (jsonpathcheck(constraintAndRecStringJson, chainrulepath)) {
+                    chainRulejs1 = jsonpathgetmultiple(constraintAndRecStringJson, chainrulepath);
+                    //jsonput(recommendation ,"chainRule",jsonpathgetsingle(constraintAndRecStringJson,chainrulepath));
+                    jsonput(recommendation, "chainRule", jsonarrayget(chainRulejs1, 0));
+                }
+
+                if (applySourceSelection) {
+                    jsonput(recommendation, "sourceIndex", targetIndex);
+                    jsonput(recommendation, "targetIndex", sourceIndex);
+                    jsonput(recommendation, "sourceAttribute", targetAttribute);
+                    jsonput(recommendation, "targetAttribute", sourceAttribute);
+                    //jsonput(recommendation ,"sourceConditions",actionCondition);
+                    //jsonput(recommendation ,"actionConditions",sourceCondition);
+                }
+
+                //AnyTrue(A) Excludes AnyTrue(C)
+                //AnyTrue(A) Excludes AnyTrue(C, D)				
+                //AnyTrue(A,B) Excludes AnyTrue(C)
+                //AnyTrue(A, B) Excludes AnyTrue(C, D)
+
+                if (applyTargetExclusion) {
+                    jsonpathset(rulesData, "$..conditions[?(@.sourceConditions == '" + actionCondition + "')].isSourceExluded", true);
+                    jsonpathset(rulesData, "$..conditions[?(@.actionConditions == '" + actionCondition + "')].isTargetExluded", true);
+                    jsonpathset(relationshipJSON, "$..relatedRules[?(@.sourceConditions == '" + actioncondition + "')].isSourceExluded", true);
+                    jsonpathset(relationshipJSON, "$..relatedRules[?(@.actionConditions == '" + actioncondition + "')].isTargetExluded", true);
+                    append(ToBeAppliedRuleIds, ruleId + "#" + sourceCondition + "#" + actionCondition); //DEFECT 28837 - on update chain rules become recursive PRO15000CKMA - Item 1205NJ0UN3 - Rule 21 > > 17  but on update 21 become child rule to 17. 17>> 21 because 17 is executed first in the chain rule loop , so no entry for 21 rule already hence this issue occured
+
+                }
+                if (applySourceExclusion) { //All Direct Exclusion rules are bi-directional
+
+                    jsonput(recommendation, "sourceIndex", targetIndex);
+                    jsonput(recommendation, "targetIndex", sourceIndex);
+                    jsonput(recommendation, "sourceAttribute", targetAttribute);
+                    jsonput(recommendation, "targetAttribute", sourceAttribute);
+                    jsonput(recommendation, "sourceConditions", actionCondition);
+                    jsonput(recommendation, "actionConditions", sourceCondition);
+
+                    jsonpathset(rulesData, "$..conditions[?(@.sourceConditions == '" + sourceCondition + "')].isSourceExluded", true);
+                    jsonpathset(rulesData, "$..conditions[?(@.actionConditions == '" + sourceCondition + "')].isTargetExluded", true);
+                    jsonpathset(relationshipJSON, "$..relatedRules[?(@.sourceConditions == '" + sourcecondition + "')].isSourceExluded", true);
+                    jsonpathset(relationshipJSON, "$..relatedRules[?(@.actionConditions == '" + sourcecondition + "')].isTargetExluded", true);
+                    append(ToBeAppliedRuleIds, ruleId + "#" + actionCondition + "#" + sourceCondition); //DEFECT 28837 - on update chain rules become recursive PRO15000CKMA - Item 1205NJ0UN3 - Rule 21 > > 17  but on update 21 become child rule to 17. 17>> 21 because 17 is executed first in the chain rule loop , so no entry for 21 rule already hence this issue occured
+                }
+                //All Direct Exclusion rules are bi-directional			
+                //Added for warning messages for override --Start
+                tempsourceConditions = jsonget(recommendation, "sourceConditions", "string", "");
+                if (tempsourceConditions <> "") {
+                    sarr = split(tempsourceConditions, ".");
+                    sarr = reverse(sarr);
+                    hovermessage = "Selecting this item will automatically restrict the availability of item " + sarr[0] + " and any other dependent items.";
+                    //hovermessage=ErrorMessage;
+                    jsonput(recommendation, "Message", hovermessage);
+                }
+                //17/02/2025 added for C014
+                if (defaultRule == "Y") {
+                    defaultMsg = "";
+                    if (operator == "EXCLUDES") {
+                        defaultMsg = "This item cannot be added to this Model if you need this accessory select a different Model";
+                    } else {
+                        defaultMsg = "This item is required to be added to this Model";
+                    }
+                    jsonput(recommendation, "Message", defaultMsg);
+                }
+                //------------------Building messages for Warning message--Start
+                sourceConditionMsg = jsonget(recommendation, "sourceConditions", "string", "");
+                actionConditionMsg = jsonget(recommendation, "actionConditions", "string", "");
+                targetIndexMsg = jsonget(recommendation, "targetIndex", "string", "");
+                sourceIndexMsg = jsonget(recommendation, "sourceIndex", "string", "");
+                //28950
+                if (targetIndexMsg <> "" AND sourceIndexMsg <> "" AND operator <> "DEFAULTS") {
+
+                    targetAttributeMsg = jsonget(recommendation, "targetAttribute");
+                    sourceAttributeMsg = jsonget(recommendation, "sourceAttribute");
+                    descPath = "$." + sourceAttributeMsg + "[?(@.index == '" + sourceIndexMsg + "')].partDescription";
+                    actionDescPath = "$." + targetAttributeMsg + "[?(@.index == '" + targetIndexMsg + "')].partDescription";
+                    actionDesc = "";
+                    actionPartNumber = "";
+                    description = "";
+                    srcPartNumber = "";
+
+                    targetPath = targetAttributeMsg + "_" + targetIndexMsg;
+                    sourcePath = sourceAttributeMsg + "_" + sourceIndexMsg;
+                    targetKey = actionConditionMsg;
+                    sourceKey = sourceConditionMsg;
+                    unSelOverrideMsg = json();
+                    jsonput(unSelOverrideMsg, "ruleId", ruleId);
+                    jsonput(unSelOverrideMsgs, targetKey + "#" + sourceKey, unSelOverrideMsg);
+                    jsonput(unSelOverrideMsgs, sourceKey + "#" + targetKey, unSelOverrideMsg);
+                    jsonput(unSelOverrideMsgs, sourceKey + "path", sourcePath);
+                    jsonput(unSelOverrideMsgs, targetKey + "path", targetPath);
+                    if (jsonpathcheck(masterStringJSON, descPath)) {
+                        partNumber = jsonpathgetsingle(masterStringJSON, "$." + sourceAttributeMsg + "[?(@.index =='" + sourceIndexMsg + "')].partNumber");
+                        desc = jsonpathgetsingle(masterStringJSON, descPath);
+                        descArr = split(desc, "\n");
+                        description = partNumber + " " + descArr[0];
+                    }
+                    jsonput(unSelOverrideMsgs, sourceKey, description);
+                    if (jsonpathcheck(masterStringJSON, actionDescPath)) {
+                        actionPartNumber = jsonpathgetsingle(masterStringJSON, "$." + targetAttributeMsg + "[?(@.index == '" + targetIndexMsg + "')].partNumber");
+                        desc = jsonpathgetsingle(masterStringJSON, actionDescPath);
+                        descArr = split(desc, "\n");
+                        actionDesc = actionPartNumber + " " + descArr[0];
+                    }
+                    jsonput(unSelOverrideMsgs, targetKey, actionDesc);
+
+                }
+                //------------------Building messages for Warning message--END			
+                //------end
+                jsonarrayappend(recommendations, recommendation);
+                jsonput(defaultsAndMessages, "recommendations", recommendations);
+                ////print "hereee:";
+                if (applyTargetSelection) { //add items to BOM list
+                    bomKey = targetItem + "#" + actionCondition;
+                    ////print duplicateBOMItems;
+                    if (findinarray(duplicateBOMItems, bomKey) == -1) {
+                        bomItem = json();
+                        jsonput(bomItem, "appliedRuleId", ruleId);
+                        jsonput(bomItem, "partNumber", targetItem);
+                        pathFound = jsonpathcheck(contributeRulesObj, "$..contributeRules[?(@.sourceConditions == '" + actionCondition + "')].actionConditions");
+                        ////print actionCondition;
+                        ////print pathFound;
+                        ////print contributeRulesObj;
+                        // commented by Gandeev(27/10/2025) because the css and rules are not working 
+                        /*if(pathFound and find(actionCondition," ") <> -1){
+                        	itemPath = jsonpathgetsingle(contributeRulesObj,"$..contributeRules[?(@.sourceConditions == '"+actionCondition+"')].actionConditions");
+                        	jsonput(bomItem,"itemPath",itemPath);
+                        }else{
+                        	jsonput(bomItem,"itemPath",actionCondition);
+                        }*/
+                        // added by Gandeev(27/10/2025) because the css and rules are not working  <---- Start ---->
+                        if (pathFound and find(actionCondition, " ") <> -1) {
+                            if (jsonpathcheck(contributeRulesObj, "$..contributeRules[?(@.sourceConditions == '" + actionCondition + "'&& @.ruleId =='" + ruleId + "')]")) {
+                                itemPath = jsonpathgetsingle(contributeRulesObj, "$..contributeRules[?(@.sourceConditions == '" + actionCondition + "' && @.ruleId =='" + ruleId + "')].actionConditions");
+                                jsonput(bomItem, "itemPath", itemPath);
+                            }
+
+                        } else {
+                            jsonput(bomItem, "itemPath", actionCondition);
+                        }
+                        // added by Gandeev(27/10/2025) because the css and rules are not working  <---- End ---->
+                        if (targetAttribute <> "") { //added as part of qty changes	
+
+                            quantity = jsonpathgetsingle(userSelectionsJSON, "$.attributeAndValues[?(@.arraySet == '" + targetAttribute + "' && @.item == '" + targetItem + "')].quantity", "integer", 1);
+                            if (quantity == 0) {
+                                quantity = 1;
+                            }
+                            jsonput(bomItem, "quantity", quantity);
+                        } else {
+                            if (isnumber(multiplier)) {
+                                jsonput(bomItem, "quantity", multiplier);
+                            } else {
+                                jsonput(bomItem, "quantity", 1);
+                            }
+                        }
+                        jsonarrayappend(bomItemsArray, bomItem);
+                        append(duplicateBOMItems, bomKey);
+                    }
+                    append(ToBeAppliedRuleIds, ruleId + "#" + sourceCondition + "#" + actionCondition); //DEFECT 28837 - on update chain rules become recursive PRO15000CKMA - Item 1205NJ0UN3 - Rule 21 > > 17  but on update 21 become child rule to 17. 17>> 21 because 17 is executed first in the chain rule loop , so no entry for 21 rule already hence this issue occured
+
+                    jsonpathset(rulesData, "$..conditions[?(@.sourceConditions == '" + actionCondition + "')].sourceConditionMet", true);
+                    jsonpathset(rulesData, "$..conditions[?(@.actionConditions == '" + actionCondition + "')].targetConditionMet", true);
+
+                    jsonpathset(relationshipJSON, "$..relatedRules[?(@.sourceConditions == '" + actionCondition + "')].sourceSelected", true);
+                    jsonpathset(relationshipJSON, "$..relatedRules[?(@.actionConditions == '" + actionCondition + "')].targetSelected", true);
+                    if (actionCondition <> "" and find(actionCondition, ".") <> -1) { //Defect #28812 issue5, rule#275 CONFIGURE EQUIPMENT.ADDITIONAL UNIT FOR 7605.S 5DR SATELLITE LOCKER (LARGE LOCKERS).9P39750 [1ST ADDITIONAL UNIT] . some rules(123) has target 9P39750 [1ST ADDITIONAL UNIT] without path
+                        actionConditionArr = split(actionCondition, ".");
+                        selectedItem = actionConditionArr[sizeofarray(actionConditionArr) - 1];
+                        jsonpathset(rulesData, "$..conditions[?(@.sourceConditions == '" + selectedItem + "')].sourceConditionMet", true);
+                        jsonpathset(rulesData, "$..conditions[?(@.actionConditions == '" + selectedItem + "')].targetConditionMet", true);
+
+                        jsonpathset(relationshipJSON, "$..relatedRules[?(@.sourceConditions == '" + selectedItem + "')].sourceSelected", true);
+                        jsonpathset(relationshipJSON, "$..relatedRules[?(@.actionConditions == '" + selectedItem + "')].targetSelected", true);
+                    }
+                }
+
+            }
+            if (showMessage) { //ANYTRUE with multiple targets
+
+                if (findinarray(messageRuleIDs, ruleId) == -1) {
+                    append(messageRuleIDs, ruleId);
+                }
+
+            }
+
+        }
+        endTime11 = getcurrenttimeinmillis();
+        //logTime("Rules New - Eval second lopp",endTime11-startTime11);
+    }
+    /*end of Evaluate the direct Rules*/
+    ////print defaultsAndMessages;
+    endTime = getcurrenttimeinmillis();
+    logTime(modelName + logComments + "Rules New - eval", endTime - startTime);
+    startTime = getcurrenttimeinmillis();
+    relationshipJSONArrayFinal = jsonarray();
+    recommendations = jsonget(defaultsAndMessages, "recommendations", "jsonarray", jsonarray());
+    // //print recommendations;
+    /*Chaining rules starts here*/
+    startTime = getcurrenttimeinmillis();
+    recIndexes = range(jsonarraysize(recommendations));
+    for recInd in recIndexes {
+        recObj = jsonarrayget(recommendations, recInd, "json");
+        //added for implies target unselection Messages--start
+        warning_messages_Childs_json = json();
+        warning_messages_jsarr = jsonarray();
+        sourceAttribute_d = jsonget(recObj, "sourceAttribute", "string", "");
+        targetAttribute_d = jsonget(recObj, "targetAttribute", "string", "");
+        targetIndex_d = jsonget(recObj, "targetIndex", "string", "");
+        sourceIndex_d = jsonget(recObj, "sourceIndex", "string", "");
+        deselctionApplied = jsonget(recObj, "deselctionApplied", "string", "");
+        if (deselctionApplied <> "") { //defect - 28743 - dont execute chaining rules for override cases
+            continue;
+        }
+        //added for implies target unselection Messages --END
+        //relatedRuleJSON = json();
+        ruleID = jsonget(recObj, "appliedRuleId", "string"); //A
+        append(ToBeAppliedRuleIds, ruleID);
+        //if(findinarray(currentAppliedRuleIds,ruleID) <> -1 and NOT runOnce){//dont run chaining rules as it was already run in previously
+        //continue;
+        //}
+
+        //if(ruleID <> "79"){continue;}
+        //print "rule>>>"+ruleID;
+        sourceItem = jsonget(recObj, "sourceConditions", "string"); //A
+        targetItem = jsonget(recObj, "actionConditions", "string"); //B
+
+        append(ToBeAppliedRuleIds, ruleID + "#" + sourceItem + "#" + targetItem); //rule can have different source and target so it should be allowed to execute
+        operator = jsonget(recObj, "operator", "string");
+        actualQueryItems = string[] {
+            targetItem
+        };
+        queryItems = string[] {
+            targetItem
+        };
+        if (targetItem <> "" and find(targetItem, ".") <> -1) { //Defect #28812 issue5, rule#275 CONFIGURE EQUIPMENT.ADDITIONAL UNIT FOR 7605.S 5DR SATELLITE LOCKER (LARGE LOCKERS).9P39750 [1ST ADDITIONAL UNIT] . some rules(123) has target 9P39750 [1ST ADDITIONAL UNIT] without path
+            actionConditionArr = split(targetItem, ".");
+            selectedItem = actionConditionArr[sizeofarray(actionConditionArr) - 1];
+            append(actualQueryItems, selectedItem);
+            append(queryItems, selectedItem);
+        }
+        ////print "sourceItemsourceItemsourceItem---?"+ruleID+"---"+sourceItem;
+        //print "queryItems===";
+        //print queryItems;
+        filterCond = "";
+        if (operator == "EXCLUDES") {
+            //filterCond = " && @.operator != 'EXCLUDES' && @.noOfConditions == 1";
+            filterCond = " && @.operator != 'EXCLUDES'";
+        }
+        /*if(operator == "IMPLIES"){
+        	////print targetItem;
+        	//jsonpathgetmultiple(relationshipJSON,"$..relatedRules[?(@.sourceConditions == '"+targetItem+"')]");
+        	jsonpathset(rulesData,"$..conditions[?(@.sourceConditions == '"+targetItem+"')].sourceSelected",true);
+        	jsonpathset(rulesData,"$..conditions[?(@.actionConditions == '"+targetItem+"')].targetSelected",true);
+
+        	jsonpathset(relationshipJSON,"$..relatedRules[?(@.sourceConditions == '"+targetItem+"')].sourceSelected",true);
+        	jsonpathset(relationshipJSON,"$..relatedRules[?(@.actionConditions == '"+targetItem+"')].targetSelected",true);
+        }*/
+        //relatedItems = jsonarray();
+
+        checkDuplicates = string[];
+        //relationshipJSONArrayTemp = jsonpathgetmultiple(relationshipJSON,"$..relatedRules[?(@.operator == 'IMPLIES' || @.operator == 'REQUIRES' || @.operator == 'DEFAULTS')]");
+        //innerLoopIndexes = range(jsonarraysize(relationshipJSONArrayTemp));//900
+        innerLoopIndexes = range(jsonarraysize(relationshipJSONArray)); //900
+        visitedItems = string[] {
+            targetItem
+        };
+
+
+        for innerInd in innerLoopIndexes {
+            ////print "queryItems---->";
+            ////print queryItems;
+            ////print visitedItems ;
+            queryItemCond = string[];
+            //append(queryItemCond,"(@.ruleId != '"+ruleID+"')");
+            if (innerInd == 0) {
+                append(queryItemCond, "(@.sourceConditions == '" + targetItem + "')");
+                append(queryItemCond, "(@.actionConditions == '" + targetItem + "')");
+            }
+            for queryItem in queryItems { //c,d
+                if (findinarray(visitedItems, queryItem) == -1) {
+                    //queryItemCond =  queryItemCond + "(@.sourceConditions == '"+queryItem+"') || (@.actionConditions == '"+queryItem+"')"
+                    //append(queryItemCond,"(@.sourceConditions == '"+queryItem+"')");
+                    //append(queryItemCond,"(@.actionConditions == '"+queryItem+"')");
+                    append(queryItemCond, "(@.sourceConditions == '" + queryItem + "' && @.sourceSelected == true)");
+                    append(queryItemCond, "(@.actionConditions == '" + queryItem + "' &&  (@.targetSelected == true || @.isTargetExluded == true))");
+                    append(visitedItems, queryItem);
+                }
+            }
+            ////print visitedItems;
+            relatedRulesArray = jsonarray();
+            if (sizeofarray(queryItemCond) == 0) {
+                //logtime("chaining queryItemCond -->"+ruleID +"--"+ string(innerInd),200); 
+                break;
+
+            }
+            //print queryItemCond;
+            //path = "$..relatedRules[?((@.ruleId != '"+ruleID+"' && @.operator != 'EXCLUDES' "+filterCond+") && ("+join(queryItemCond," || ")+"))]";
+            //path = "$..relatedRules[?((@.ruleId != '"+ruleID+"' "+filterCond+") && ("+join(queryItemCond," || ")+"))]";
+            path = "$..relatedRules[?((@.ruleId != '" + ruleID + "' " + filterCond + ") && (" + join(queryItemCond, " || ") + ") && @.Visited == false)]"; //Defect#46 added Visited condition to improve the performance issue. RSL7604C 111 >> 123 >> 1 repeated mutliple times though it was visited already. 
+            //path = "$..relatedRules[?((@.ruleId != '"+ruleID+"' "+filterCond+") && ("+join(queryItemCond," || ")+") && @.Visited == false)].ruleId"; // added by gandeev 01/08/2026;
+            ////print path;
+
+            //-----------------------------------------------------------Srini added on 1-17-26 ---start
+            // defects(28532,28564,28837)-->Indirect Rule scenario on exclusion on implies
+            //rule #1:A Impliies B and C, D
+            //rule #2:E Excludes B and C
+            //Expection: When user selected E --> B and C got exlcuded, D will get implies(because only one item available)
+            All_relatedRulesArray = jsonpathgetmultiple(relationshipJSON, path);
+            relatedIndexes_size = (jsonarraysize(All_relatedRulesArray));
+            path_rr = "";
+            //print relatedIndexes_size ;
+            if (relatedIndexes_size > 0) {
+                relatedRules_temparr = string[];
+                relatedIndexes = range(relatedIndexes_size);
+                for rr in relatedIndexes {
+                    relatedItemJSON = jsonarrayget(All_relatedRulesArray, rr, "json");
+                    ruleId_rr = jsonget(relatedItemJSON, "ruleId", "string");
+                    append(relatedRules_temparr, "(@.ruleId == '" + ruleId_rr + "')");
+                }
+                path_rr = "$..relatedRules[?(" + Join(relatedRules_temparr, " || ") + ")]";
+            } else {
+                break;
+            }
+            //relatedRulesArray=jsonarray();
+            if (path_rr <> "" AND jsonpathcheck(relationshipJSON, path_rr)) {
+                relatedRulesArray = jsonpathgetmultiple(relationshipJSON, path_rr);
+            }
+            //-------------------------------------------------srini added on 1-17-26--END
+            //relatedRulesArray = jsonpathgetmultiple(relationshipJSON,path);// srini commented on 1-17-26 added code above 
+            if (jsonarraysize(relatedRulesArray) == 0) {
+                //logtime("chaining relatedRulesArray -->"+ruleID +"--"+ string(innerInd),200); 
+                break;
+            }
+            //print relatedRulesArray;
+            relatedIndexes = range(jsonarraysize(relatedRulesArray));
+            queryItems = string[];
+
+            for rind in relatedIndexes {
+                relatedItemJSON = jsonarrayget(relatedRulesArray, rind, "json");
+                ////print relatedItemJSON;
+                ruleIdNested = jsonget(relatedItemJSON, "ruleId", "string"); //A
+                conditionIdNested = jsonget(relatedItemJSON, "conditionId", "string");
+                //print "ruleIdNestedruleIdNested=="+ruleIdNested+"=="+conditionIdNested;
+                ////print relatedItemJSON;
+
+                ruleDataObj = jsonget(rulesData, ruleIdNested, "json");
+                conditions = jsonget(ruleDataObj, "conditions", "jsonarray");
+                areAllItemsExluded = NOT jsonpathcheck(ruleDataObj, "$.conditions[?(@.isTargetExluded == false)]");
+                atleastOneItemExluded = jsonpathcheck(ruleDataObj, "$.conditions[?(@.isTargetExluded == true)]");
+                areAllSourceItemsSelected = NOT jsonpathcheck(ruleDataObj, "$.conditions[?(@.sourceConditionMet == false)]");
+                areAllTargetItemsSelected = NOT jsonpathcheck(ruleDataObj, "$.conditions[?(@.targetConditionMet == false)]");
+                noOfExcludedItems = jsonarraysize(jsonpathgetmultiple(ruleDataObj, "$.conditions[?(@.isTargetExluded == true)]"));
+                //nonExcludedItems = jsonpathgetmultiple(ruleDataObj,"$.conditions[?(@.isTargetExluded == false)].actionConditions");
+
+                atleastOneSourceItemSelected = jsonpathcheck(ruleDataObj, "$.conditions[?(@.sourceConditionMet == true)]");
+                atleastOneTargetItemSelected = jsonpathcheck(ruleDataObj, "$.conditions[?(@.targetConditionMet == true)]");
+                noOfItemsSelected = jsonarraysize(jsonpathgetmultiple(ruleDataObj, "$.conditions[?(@.sourceConditionMet == true)]"));
+
+                sourceItemNested = jsonget(relatedItemJSON, "sourceConditions", "string"); //A
+                targetItemNested = jsonget(relatedItemJSON, "actionConditions", "string"); //B
+
+                sourceItemsStr = jsonget(ruleDataObj, "sourceItems", "string"); //jsonget(relatedItemJSON,"sourceItems","string");3
+                targetItemsStr = jsonget(ruleDataObj, "targetItems", "string"); //jsonget(relatedItemJSON,"targetItems","string");
+                ErrorMessage = jsonget(ruleDataObj, "ErrorMessage", "string", "");
+                operatorNested = jsonget(relatedItemJSON, "operator", "string");
+
+                functionName = jsonget(relatedItemJSON, "functionName", "string");
+                actionFunction = jsonget(relatedItemJSON, "actionFunction", "string");
+
+                //sourceSelectedNested = jsonget(relatedItemJSON,"sourceSelected","boolean",false);
+                //targetSelectedNested = jsonget(relatedItemJSON,"targetSelected","boolean",false);
+                sourceSelectedNested = jsonpathcheck(ruleDataObj, "$.conditions[?(@.conditionId == '" + conditionIdNested + "' && @.sourceConditionMet == true)]"); //Defect #29082 - PROC5410S - rule 41 - 409768 get excluded
+                targetSelectedNested = jsonpathcheck(ruleDataObj, "$.conditions[?(@.conditionId == '" + conditionIdNested + "' && @.targetConditionMet == true)]"); //Defect #29082 - PROC5410S - rule 41 - 409768 get excluded
+                //isTargetExluded =  jsonget(relatedItemJSON,"isTargetExluded") == "true";//Defect #29082 - PROC5410S - rule 41 - 409768 get excluded
+                isTargetExluded = jsonpathcheck(ruleDataObj, "$.conditions[?(@.conditionId == '" + conditionIdNested + "' && @.isTargetExluded == true)]"); //Defect #29082 - PROC5410S - rule 41 - 409768 get excluded
+                defaultRuleNested = jsonget(relatedItemJSON, "defaultRule", "string", "");
+                duplicate = ruleIdNested + "#" + sourceItemNested + "#" + targetItemNested;
+                duplicate1 = ruleIdNested + "#" + targetItemNested + "#" + sourceItemNested; //IMC3510 Rule 110, chain rule 231 added two times with bidirectional
+                if (findinarray(ToBeAppliedRuleIds, ruleIdNested) <> -1) { //dont consider the current applied rules in the nested rules
+                    if (findinarray(ToBeAppliedRuleIds, duplicate) <> -1 OR findinarray(ToBeAppliedRuleIds, duplicate1) <> -1) { //dont consider the current applied rules in the nested rules
+                        continue;
+                    }
+                }
+                if (findinarray(checkDuplicates, duplicate) <> -1 OR findinarray(checkDuplicates, duplicate1) <> -1) {
+                    continue;
+                }
+                if (findinarray(ToBeAppliedRuleIds, duplicate) == -1) {
+                    append(ToBeAppliedRuleIds, duplicate); //IMC3510 Rule 110, chain rule 231 added two times with bidirectional
+
+                }
+                if (findinarray(ToBeAppliedRuleIds, duplicate1) == -1) {
+                    append(ToBeAppliedRuleIds, duplicate1); //IMC3510 Rule 110, chain rule 231 added two times with bidirectional
+                }
+                sourceItems = split(sourceItemsStr, "#");
+                targetItems = split(targetItemsStr, "#");
+                noOfSourceItems = sizeofarray(sourceItems);
+                noOfTargetItems = sizeofarray(targetItems);
+                //noOf_SourceItems = jsonarraysize(jsonpathgetmultiple(ruleDataObj,"$.conditions[?(@.sourceConditionMet == true)]"));;
+                //noOf_TargetItems = jsonarraysize(conditions);
+                noOf_ItemsSelected = jsonarraysize(jsonpathgetmultiple(ruleDataObj, "$.conditions[?(@.firstOccurance == true && @.sourceConditionMet == true)]")); //Defect #28812 issue5, rule#275 >> 123,  to no of selected items
+
+                //print "operator===="+operator;
+                //print "operatorNested---"+operatorNested;
+                //print sourceItems;
+                //print targetItems;
+                //print actionFunction;
+                //print targetSelectedNested;
+
+                ////print "sourceSelectedNested sourceSelectedNested ";
+                ////print sourceSelectedNested ;
+                //print sourceItemNested +"====="+targetItemNested;
+                sourceConditionMet = false;
+                targetConditionMet = false;
+                if (functionName == "ANYTRUE" and sourceSelectedNested) {
+                    sourceConditionMet = true;
+                    //sbappend(message,"Please select one of the items(",itemsForMessage,")");
+                }
+                if (functionName == "ALLTRUE" and areAllSourceItemsSelected) {
+                    sourceConditionMet = true;
+                }
+
+                if (actionFunction == "ANYTRUE" and targetSelectedNested) {
+                    targetConditionMet = true;
+                }
+                if (actionFunction == "ALLTRUE" and areAllTargetItemsSelected) {
+                    targetConditionMet = true;
+                }
+                if (findinarray(checkDuplicates, duplicate) == -1) {
+                    ////print "????????????";
+                    ////print sourceConditionMet;
+                    setType = "set";
+                    value = true;
+                    allowThisRule = false;
+                    applySourceExclusion = false;
+                    applyTargetExclusion = false;
+                    applySourceSelection = false;
+                    applyTargetSelection = false;
+                    showMessage = false;
+                    combination_rule = false;
+                    if (operator == "EXCLUDES") {
+                        if (operatorNested == "IMPLIES" OR operatorNested == "DEFAULTS") {
+                            if (functionName == "ANYTRUE" and actionFunction == "ANYTRUE" and areAllItemsExluded and operatorNested <> "DEFAULTS") { //Defect #28567 - added DEFAULTS cond. self constraint issue on 3rd additional unit selction and update. Rule 36 shouldn't be triggered
+                                applySourceExclusion = true;
+                            } elif (functionName == "ANYTRUE" and actionFunction == "ANYTRUE" and sourceConditionMet and noOfTargetItems > 1 and (noOfTargetItems - 1) == noOfExcludedItems and NOT isTargetExluded and NOT targetSelectedNested) { //ST 02-01-2026
+                                applyTargetSelection = true; //auto select the non excluded item
+                                //print "heeeeer";
+                                //print noOfTargetItems;
+                                //print noOfExcludedItems;
+                            } elif (functionName == "ALLTRUE" and actionFunction == "ANYTRUE" and sourceConditionMet and noOfTargetItems > 1 and (noOfTargetItems - 1) == noOfExcludedItems and NOT isTargetExluded and NOT targetSelectedNested) { //ST 02-01-2026
+                                if (sizeofarray(sourceItems) > 1 and sizeofarray(targetItems) > 1) {
+                                    combination_rule = true;
+                                }
+                                applyTargetSelection = true;
+                                //auto select the non excluded item
+                            } elif (functionName == "ALLTRUE" and actionFunction == "ANYTRUE" and (areAllItemsExluded or atleastOneTargetItemSelected)) { //Defect #28812,issue5 - added targetConditionMet to fix double update issue.
+                                if (sizeofarray(sourceItems) > 1 and sizeofarray(targetItems) > 1) {
+                                    combination_rule = true;
+                                }
+                                if (sizeofarray(sourceItems) == 1 and areAllItemsExluded) {
+                                    applySourceExclusion = true;
+                                } elif ((noOfSourceItems - 1) == noOf_ItemsSelected and NoT sourceSelectedNested) {
+                                    //applySourceExclusion = true;//commented out  Defect #29912 - P501 When 418080, 418081, 52007 are selected  --418219,418218 are getting excluded 
+                                    blank = "";
+                                }
+                            } elif (functionName == "ANYTRUE" and actionFunction == "ALLTRUE" and atleastOneItemExluded) {
+                                applySourceExclusion = true;
+                            } elif (functionName == "ALLTRUE" and actionFunction == "ALLTRUE" and atleastOneItemExluded) {
+                                if (sizeofarray(sourceItems) == 1) {
+                                    applySourceExclusion = true;
+                                } elif ((noOfSourceItems - 1) == noOf_ItemsSelected and NoT sourceSelectedNested) {
+                                    applySourceExclusion = true;
+                                }
+                            }
+
+                        }
+
+                    }
+                    //print "-------1";
+                    //print applyTargetSelection;
+                    if (operator == "IMPLIES" OR operator == "DEFAULTS") {
+                        if (operatorNested == "IMPLIES" OR operatorNested == "DEFAULTS") {
+                            if (functionName == "ANYTRUE" and sourceConditionMet and actionFunction == "ANYTRUE" and sizeofarray(targetItems) == 1) {
+                                applyTargetSelection = true;
+                            } elif (functionName == "ANYTRUE" and sourceConditionMet and actionFunction == "ANYTRUE" and noOfTargetItems > 1 and (noOfTargetItems - 1) == noOfExcludedItems and NOT isTargetExluded and NOT targetSelectedNested) { //ST 02-01-2026
+                                applyTargetSelection = true; //auto select the non excluded item
+                            } elif (functionName == "ANYTRUE" and sourceConditionMet and actionFunction == "ANYTRUE" and NOT areAllItemsExluded and Not atleastOneTargetItemSelected and operator == "IMPLIES") {
+                                showMessage = true;
+                            } elif (functionName == "ALLTRUE" and sourceConditionMet and actionFunction == "ANYTRUE" and (areAllItemsExluded or atleastOneTargetItemSelected)) { //Defect #28812,issue5 - added targetConditionMet to fix double update issue.
+                                if (sizeofarray(sourceItems) > 1 and sizeofarray(targetItems) > 1) {
+                                    combination_rule = true;
+                                }
+                                if (sizeofarray(sourceItems) == 1 and areAllItemsExluded) {
+                                    applySourceExclusion = true;
+                                } elif ((noOfSourceItems - 1) == noOf_ItemsSelected and NoT sourceSelectedNested) {
+                                    applySourceExclusion = true;
+                                }
+
+                            } elif (functionName == "ANYTRUE" and actionFunction == "ANYTRUE" and areAllItemsExluded) {
+                                applySourceExclusion = true;
+
+                            } elif (functionName == "ANYTRUE" and actionFunction == "ALLTRUE" and atleastOneItemExluded) {
+                                applySourceExclusion = true;
+
+                            } elif (functionName == "ALLTRUE" and sourceConditionMet and actionFunction == "ANYTRUE" and NOT areAllItemsExluded and Not atleastOneTargetItemSelected and operator == "IMPLIES") {
+                                showMessage = true;
+                            } elif (functionName == "ANYTRUE" and sourceConditionMet and actionFunction == "ALLTRUE") {
+                                applyTargetSelection = true;
+                            } elif (functionName == "ALLTRUE" and sourceConditionMet and actionFunction == "ALLTRUE") {
+                                applyTargetSelection = true;
+                            }
+
+                        }
+
+                    }
+                    //print "-------2";
+                    //print applyTargetSelection;
+                    if (operator == "IMPLIES" OR operator == "DEFAULTS") {
+                        if (operatorNested == "EXCLUDES") {
+
+                            if (functionName == "ANYTRUE" and atleastOneSourceItemSelected and sourceSelectedNested and actionFunction == "ANYTRUE" and operatorNested <> "DEFAULTS") { //Defect #28567 - added DEFAULTS cond. self constraint issue on 3rd additional unit selction and update. Rule 36 shouldn't be triggered
+                                applyTargetExclusion = true;
+                            }
+                            /*elif(functionName == "ANYTRUE" and sourceConditionMet and actionFunction == "ANYTRUE"  and  noOfTargetItems > 1 and (noOfTargetItems-1) == noOfExcludedItems and NOT isTargetExluded and NOT targetSelectedNested)
+                            {//SG 06-01-2026
+                            	applyTargetSelection = true; //auto select the non excluded item if only target is available
+                            }*/
+                            elif (functionName == "ANYTRUE" and atleastOneTargetItemSelected and targetSelectedNested and actionFunction == "ANYTRUE" and operatorNested <> "DEFAULTS") { //Defect #28567 - added DEFAULTS cond. self constraint issue on 3rd additional unit selction and update. Rule 36 shouldn't be triggered
+                                applySourceExclusion = true;
+                            } elif (functionName == "ALLTRUE" and areAllSourceItemsSelected and actionFunction == "ANYTRUE") {
+                                if (sizeofarray(sourceItems) > 1 and sizeofarray(targetItems) > 1) {
+                                    combination_rule = true;
+                                }
+                                applyTargetExclusion = true;
+                            } elif (functionName == "ALLTRUE" and atleastOneTargetItemSelected and actionFunction == "ANYTRUE" AND noOfSourceItems == 1) {
+                                applySourceExclusion = true;
+                            } elif (functionName == "ALLTRUE" and atleastOneTargetItemSelected and actionFunction == "ANYTRUE" and targetSelectedNested) {
+                                //print "No exclusion applied";
+                                print "I am here";
+                                print noOfSourceItems;
+                                print noOf_ItemsSelected;
+                                print sourceSelectedNested;
+                                if (sizeofarray(sourceItems) > 1 and sizeofarray(targetItems) > 1) {
+                                    combination_rule = true;
+                                }
+                                if ((noOfSourceItems - 1) == noOf_ItemsSelected and NoT sourceSelectedNested) { //Defect #28812,issue5 -  to fix double update issue.
+                                    applySourceExclusion = true;
+                                }
+
+                            } elif (functionName == "ANYTRUE" and atleastOneSourceItemSelected and sourceSelectedNested and actionFunction == "ALLTRUE") {
+                                applyTargetExclusion = true;
+                            } elif (functionName == "ANYTRUE" and atleastOneTargetItemSelected and targetSelectedNested and actionFunction == "ALLTRUE") {
+                                print "No exclusion applied";
+                            } elif (functionName == "ALLTRUE" and areAllSourceItemsSelected and actionFunction == "ALLTRUE") {
+                                applyTargetExclusion = true;
+                            } elif (functionName == "ALLTRUE" and areAllTargetItemsSelected and actionFunction == "ALLTRUE") {
+                                print "No exclusion applied";
+                            }
+
+                        }
+
+                    }
+                    //print "applySourceExclusion===";
+                    //print applySourceExclusion;			
+                    //print applyTargetExclusion;
+                    //print applyTargetSelection;
+                    if (applySourceExclusion or applyTargetExclusion) {
+                        setType = "forceSet";
+                        value = false;
+                        allowThisRule = true;
+                    }
+                    if (applyTargetSelection) {
+                        setType = "set";
+                        value = true;
+                        allowThisRule = true;
+                    }
+
+
+                    //if( (operatorNested == "IMPLIES" 
+                    //and ((sizeofarray(sourceItems) == 1 and (sizeofarray(targetItems) == 1 OR  actionFunction == "ALLTRUE")) OR areAllItemsExluded )
+                    //and ((operator == "EXCLUDES" /*and targetItem == targetItemNested*/)						
+                    //OR (operator == "IMPLIES" and sourceSelectedNested)))){//exlusion
+                    ///*OR (operator == "IMPLIES" and  sourceItem == sourceItemNested))){*/
+                    ////print "allowThisRuleallowThisRule";
+                    ////print targetConditionMet ;
+                    ////print allowThisRule;
+                    if (allowThisRule) {
+                        ////print "?????^^^^???????";
+                        if (findinarray(messageRuleIDs, ruleIdNested) <> -1) { //Defect 127- Remove th message if the item is slected through chaining already
+                            msgPos = findinarray(messageRuleIDs, ruleIdNested);
+                            remove(messageRuleIDs, msgPos);
+                        }
+                        recommendations = jsonget(defaultsAndMessages, "recommendations", "jsonarray", jsonarray());
+                        condObjArr = jsonpathgetmultiple(ruleDataObj, "$.conditions[?(@.sourceConditions == '" + sourceItemNested + "' && @.actionConditions == '" + targetItemNested + "')]");
+                        condObj = jsonarrayget(condObjArr, 0, "json");
+                        if (jsonarraysize(condObjArr) > 1) {
+                            print "************" + ruleIdNested + "===" + sourceItemNested;
+                        }
+                        jsonpathset(relationshipJSON, "$..relatedRules[?(@.ruleId == '" + ruleIdNested + "' && @.conditionId == '" + conditionIdNested + "')].Visited", true); //Defect#46 performance issue
+                        //condObj = jsonpathgetsingle(ruleDataObj,"$.conditions[?(@.sourceConditions == '"+sourceItemNested+"' && @.actionConditions == '"+targetItemNested+"')]","json");
+                        sourceIndex = jsonget(condObj, "sourceIndex");
+                        targetIndex = jsonget(condObj, "targetIndex");
+                        sourceAttribute = jsonget(condObj, "sourceAttribute");
+                        targetAttribute = jsonget(condObj, "targetAttribute");
+                        multiplier = jsonget(condObj, "multiplier");
+                        sourceItemTemp = jsonget(condObj, "sourceItem");
+                        targetItemTemp = jsonget(condObj, "targetItem");
+                        //actionConditions = jsonget(condObj,"actionConditions");
+                        //sourceConditions = jsonget(condObj,"sourceConditions");
+
+                        recommendation = json();
+                        jsonput(recommendation, "appliedRuleId", ruleIdNested);
+                        jsonput(recommendation, "operator", operatorNested);
+                        jsonput(recommendation, "functionName", functionName);
+                        jsonput(recommendation, "actionFunctionName", actionFunction);
+                        jsonput(recommendation, "setType", setType);
+                        jsonput(recommendation, "value", value);
+                        jsonput(recommendation, "sourceIndex", sourceIndex);
+                        jsonput(recommendation, "targetIndex", targetIndex);
+                        jsonput(recommendation, "sourceAttribute", sourceAttribute);
+                        jsonput(recommendation, "targetAttribute", targetAttribute);
+                        jsonput(recommendation, "sourceConditions", sourceItemNested);
+                        jsonput(recommendation, "actionConditions", targetItemNested);
+                        jsonput(recommendation, "combination_rule", combination_rule);
+                        jsonput(recommendation, "defaultRule", defaultRuleNested); //03/02/2026 added for C014
+                        jsonput(recommendation, "chainRule", ruleID);
+
+                        /*srcIndex = 	sourceIndex;
+                        tgtIndex = targetIndex;
+                        srcAttribute = sourceAttribute;
+                        tgtAttribute = targetAttribute;
+                        srcItemNested = sourceItemNested;
+                        tgtItemNested = targetItemNested;
+                        */
+                        if (applySourceExclusion) {
+                            jsonput(recommendation, "operator", "EXCLUDES");
+                            jsonput(recommendation, "sourceIndex", targetIndex); //target becomes source for exlusion
+                            jsonput(recommendation, "targetIndex", sourceIndex); //source becomes target for exlusion			
+                            jsonput(recommendation, "sourceAttribute", targetAttribute);
+                            jsonput(recommendation, "targetAttribute", sourceAttribute);
+                            jsonput(recommendation, "sourceConditions", targetItemNested);
+                            jsonput(recommendation, "actionConditions", sourceItemNested);
+
+                            //update the references
+                            jsonpathset(rulesData, "$..conditions[?(@.sourceConditions == '" + sourceItemNested + "')].isSourceExluded", true);
+                            jsonpathset(rulesData, "$..conditions[?(@.actionConditions == '" + sourceItemNested + "')].isTargetExluded", true);
+
+                            jsonpathset(relationshipJSON, "$..relatedRules[?(@.sourceConditions == '" + sourceItemNested + "')].isSourceExluded", true);
+                            jsonpathset(relationshipJSON, "$..relatedRules[?(@.actionConditions == '" + sourceItemNested + "')].isTargetExluded", true);
+                        } elif (applyTargetSelection) {
+
+                            bomKey = targetItemTemp + "#" + targetItemNested;
+                            if (findinarray(duplicateBOMItems, bomKey) == -1) {
+                                bomItem = json();
+                                jsonput(bomItem, "appliedRuleId", ruleIdNested);
+                                jsonput(bomItem, "partNumber", targetItemTemp);
+                                jsonput(bomItem, "itemPath", targetItemNested);
+                                if (targetAttribute <> "") { //added as part of qty changes									
+                                    quantity = jsonpathgetsingle(userSelectionsJSON, "$.attributeAndValues[?(@.arraySet == '" + targetAttribute + "' && @.item == '" + targetItemTemp + "')].quantity", "integer", 1);
+                                    if (quantity == 0) {
+                                        quantity = 1;
+                                    }
+                                    jsonput(bomItem, "quantity", quantity);
+                                } else {
+                                    if (isnumber(multiplier)) {
+                                        jsonput(bomItem, "quantity", multiplier);
+                                    } else {
+                                        jsonput(bomItem, "quantity", 1);
+                                    }
+                                }
+                                jsonarrayappend(bomItemsArray, bomItem);
+                                append(duplicateBOMItems, bomKey);
+                            }
+                            //update the references
+                            jsonpathset(rulesData, "$..conditions[?(@.sourceConditions == '" + targetItemNested + "')].sourceConditionMet", true);
+                            jsonpathset(rulesData, "$..conditions[?(@.actionConditions == '" + targetItemNested + "')].targetConditionMet", true);
+
+                            jsonpathset(relationshipJSON, "$..relatedRules[?(@.sourceConditions == '" + targetItemNested + "')].sourceSelected", true);
+                            jsonpathset(relationshipJSON, "$..relatedRules[?(@.actionConditions == '" + targetItemNested + "')].targetSelected", true);
+
+                            if (targetItemNested <> "" and find(targetItemNested, ".") <> -1) { //Defect #28812 issue5, rule#275 CONFIGURE EQUIPMENT.ADDITIONAL UNIT FOR 7605.S 5DR SATELLITE LOCKER (LARGE LOCKERS).9P39750 [1ST ADDITIONAL UNIT] . some rules(123) has target 9P39750 [1ST ADDITIONAL UNIT] without path
+                                actionConditionArr = split(targetItemNested, ".");
+                                selectedItem = actionConditionArr[sizeofarray(actionConditionArr) - 1];
+                                jsonpathset(rulesData, "$..conditions[?(@.sourceConditions == '" + selectedItem + "')].sourceConditionMet", true);
+                                jsonpathset(rulesData, "$..conditions[?(@.actionConditions == '" + selectedItem + "')].targetConditionMet", true);
+
+                                jsonpathset(relationshipJSON, "$..relatedRules[?(@.sourceConditions == '" + selectedItem + "')].sourceSelected", true);
+                                jsonpathset(relationshipJSON, "$..relatedRules[?(@.actionConditions == '" + selectedItem + "')].targetSelected", true);
+                            }
+
+                        } elif (applyTargetExclusion) {
+                            jsonput(recommendation, "operator", "EXCLUDES");
+                            jsonput(recommendation, "setType", "forceSet");
+                            jsonpathset(rulesData, "$..conditions[?(@.sourceConditions == '" + targetItemNested + "')].isSourceExluded", true);
+                            jsonpathset(rulesData, "$..conditions[?(@.actionConditions == '" + targetItemNested + "')].isTargetExluded", true);
+
+                            jsonpathset(relationshipJSON, "$..relatedRules[?(@.sourceConditions == '" + targetItemNested + "')].isSourceExluded", true);
+                            jsonpathset(relationshipJSON, "$..relatedRules[?(@.actionConditions == '" + targetItemNested + "')].isTargetExluded", true);
+
+                        }
+
+                        //Added for warning messages for override --Start
+                        tempsourceConditions = jsonget(recommendation, "sourceConditions", "string", "");
+                        if (tempsourceConditions <> "") {
+                            sarr = split(tempsourceConditions, ".");
+                            sarr = reverse(sarr);
+                            hovermessage = "Selecting this item will automatically restrict the availability of item " + sarr[0] + " and any other dependent items.";
+                            //hovermessage=ErrorMessage;
+                            jsonput(recommendation, "Message", hovermessage);
+                        }
+                        //17/02/2025  added for C014
+                        if (defaultRuleNested == "Y") {
+                            defaultMsg = "";
+                            if (operatorNested == "EXCLUDES") {
+                                defaultMsg = "This item cannot be added to this Model if you need this accessory select a different Model";
+                            } else {
+                                defaultMsg = "This item is required to be added to this Model";
+                            }
+                            jsonput(recommendation, "Message", defaultMsg);
+                        }
+                        //------------------Building messages for Warning message--Start
+                        //28950
+                        targetIndexMsg = jsonget(recommendation, "targetIndex", "string", "");
+                        sourceIndexMsg = jsonget(recommendation, "sourceIndex", "string", "");
+                        if (targetIndexMsg <> "" AND sourceIndexMsg <> "") {
+                            targetAttributeMsg = jsonget(recommendation, "targetAttribute");
+                            sourceAttributeMsg = jsonget(recommendation, "sourceAttribute");
+                            sourceConditionMsg = jsonget(recommendation, "sourceConditions");
+                            actionConditionMsg = jsonget(recommendation, "actionConditions");
+                            targetPath = targetAttributeMsg + "_" + targetIndexMsg;
+                            sourcePath = sourceAttributeMsg + "_" + sourceIndexMsg;
+                            targetKey = actionConditionMsg;
+                            sourceKey = sourceConditionMsg;
+                            unSelOverrideMsg = json();
+                            jsonput(unSelOverrideMsg, "ruleId", ruleIdNested);
+
+                            jsonput(unSelOverrideMsg, "chainRule", ruleID);
+                            jsonput(unSelOverrideMsgs, targetKey + "#" + sourceKey, unSelOverrideMsg);
+                            jsonput(unSelOverrideMsgs, sourceKey + "path", sourcePath);
+                            jsonput(unSelOverrideMsgs, targetKey + "path", targetPath);
+
+                            jsonput(unSelOverrideMsgs, sourceKey + "#" + targetKey, unSelOverrideMsg);
+                            description = "";
+                            actionDesc = "";
+                            actionPartNumber = "";
+                            partNumber = "";
+                            actionDescPath = "$." + targetAttributeMsg + "[?(@.index =='" + targetIndexMsg + "')].partDescription";
+                            descriptionPath = "$." + sourceAttributeMsg + "[?(@.index =='" + sourceIndexMsg + "')].partDescription";
+                            if (jsonpathcheck(masterStringJSON, descriptionPath)) {
+                                partNumber = jsonpathgetsingle(masterStringJSON, "$." + sourceAttributeMsg + "[?(@.index == '" + sourceIndexMsg + "')].partNumber");
+                                des = jsonpathgetsingle(masterStringJSON, descriptionPath);
+                                des_arr = split(des, "\n");
+                                description = partNumber + " " + des_arr[0];
+                            }
+                            if (jsonpathcheck(masterStringJSON, actionDescPath)) {
+                                actionPartNumber = jsonpathgetsingle(masterStringJSON, "$." + targetAttributeMsg + "[?(@.index =='" + targetIndexMsg + "')].partNumber");
+                                des = jsonpathgetsingle(masterStringJSON, actionDescPath);
+                                des_arr = split(des, "\n");
+                                actionDesc = actionPartNumber + " " + des_arr[0];
+                            }
+                            jsonput(unSelOverrideMsgs, sourceKey, description);
+                            jsonput(unSelOverrideMsgs, targetKey, actionDesc);
+
+
+                        }
+                        //------------------Building messages for Warning message--END			
+                        //------end
+                        jsonarrayappend(recommendations, recommendation);
+                        jsonput(defaultsAndMessages, "recommendations", recommendations);
+                        if (find(sourceItemNested, "'") == -1 and find(targetItemNested, "'") == -1 and find(sourceItemNested, "\"") == -1 and find(targetItemNested, "\"") == -1) {
+                            if (findinarray(visitedItems, sourceItemNested) <> -1) { //28812 - double update issue - the item was marked as visited, but now selected through chaining so it must be revisited
+                                vItemPos = findinarray(visitedItems, sourceItemNested);
+                                remove(visitedItems, vItemPos);
+                                //if(endswith(sourceItemNested,"9P39750 [1ST ADDITIONAL UNIT]")){
+                                //print "this rule==="+ruleIdNested ;
+                                //}
+                            }
+                            if (findinarray(visitedItems, targetItemNested) <> -1) { //28812 - double update issue - the item was marked as visited, but now selected through chaining so it must be revisited
+                                vItemPos = findinarray(visitedItems, targetItemNested);
+                                remove(visitedItems, vItemPos);
+                                //if(endswith(sourceItemNested,"9P39750 [1ST ADDITIONAL UNIT]")){
+                                //print "this rulevv==="+ruleIdNested ;
+                                //}
+                            }
+                            if (findinarray(queryItems, sourceItemNested) == -1) { //Defect#46 added condition to resolve performance issue 
+                                append(queryItems, sourceItemNested);
+                            }
+                            if (findinarray(queryItems, targetItemNested) == -1) { //Defect#46 added condition to resolve performance issue 
+                                append(queryItems, targetItemNested);
+                            }
+                            //append(queryItems,sourceItemNested);
+                            //append(queryItems,targetItemNested);
+                        } else {
+                            print "Problematic------";
+                            //print sourceItemNested;
+                            //print targetItemNested;
+                        }
+                        append(checkDuplicates, duplicate); //28812 - double update issue #issue 5
+                    } elif (showMessage) {
+                        if (findinarray(messageRuleIDs, ruleIdNested) == -1) {
+                            append(messageRuleIDs, ruleIdNested);
+                            //print "messageRuleIDs-->"+ruleIdNested;
+                        }
+
+                    }
+                    //append(checkDuplicates,duplicate);//28812 - double update issue #issue 5	
+                }
+                ////print "Reached Here---->";
+                //relatedItemJSON = jsonpathgetsingle(relationshipJSON,);
+            }
+
+        }
+
+    }
+    //28950
+    Final_warning_messages_json = util.getImpactedEDPCodesList(jsontostr(unSelOverrideMsgs), masterString, jsontostr(defaultsAndMessages));
+
+    print "UnSelOverrideMsgs:::";
+    print Final_warning_messages_json;
+    endTime = getcurrenttimeinmillis();
+    ////print "Reached Here1---->";
+    /*end of Chaining rules */
+    logTime(modelName + logComments + "Chaining Rules Evaleuation", endTime - startTime);
+    endTime = getcurrenttimeinmillis();
+    logTime(modelName + logComments + "Chaining Rule Unselect", endTime - startTime);
+    logTime("Chaining Rule Unselect***", endTime - startTime);
+    //==========================Autounselect chaining Items END
+
+    /*ST/SG defect 28950*/ //added to deselect dependent rules when override is happen
+    pathcheck_un = jsonpathcheck(userSelectionsJSON, "$.unselectedvalues..arraySet");
+    overrideitemspath = jsonpathcheck(userSelectionsJSON, "$..attributeAndValues[?(@.Override == 'true')]"); //Defect #29082 -  PROC5410S - rule 17 - double update issue on override of E28B-MEM32GB
+    jsonput(defaultsAndMessages, "AutoUnSelect", autodeselectjsarray); //Defect #29082 -  PROC5410S - rule 17 - double update issue on override of E28B-MEM32GB
+    if ((override_flag OR pathcheck_un or overrideitemspath) AND jsonpathcheck(constraintAndRecStringJson, "$.defaultsAndMessages.recommendations")) {
+        previousRecemmendations = jsonpathgetsingle(constraintAndRecStringJson, "$.defaultsAndMessages.recommendations", "jsonarray", jsonarray());
+        indexes = range(jsonarraysize(previousRecemmendations));
+        recommendations = jsonget(defaultsAndMessages, "recommendations", "jsonarray", jsonarray());
+        for i in indexes {
+            recommendation = jsonarrayget(previousRecemmendations, i, "json");
+            ruleId = jsonget(recommendation, "appliedRuleId", "string");
+            operator = jsonget(recommendation, "operator", "string");
+            actionConditions = jsonget(recommendation, "actionConditions", "string");
+            sourceConditions = jsonget(recommendation, "sourceConditions", "string");
+            pathCheck = jsonpathcheck(defaultsAndMessages, "$..recommendations[?(@.appliedRuleId =='" + ruleId + "' && (@.operator == 'IMPLIES' || @.operator == 'DEFAULTS'))]");
+            foundActiveRule = jsonpathcheck(defaultsAndMessages, "$..recommendations[?(@.actionConditions =='" + actionConditions + "')]"); //Defect #28567 P800 - issue#3 double update issue on override
+            if (not pathCheck and operator <> "EXCLUDES" and Not foundActiveRule) {
+                jsonput(recommendation, "value", false);
+                jsonput(recommendation, "appliedFrom", "Unset"); //
+                //jsonput(recommendation,"chainRule","-1");//unset chain rule id
+                jsonarrayappend(autodeselectjsarray, recommendation);
+            }
+            checkPath = "$..recommendations[?(@.appliedRuleId =='" + ruleId + "' && @.sourceConditions == '" + sourceConditions + "' && @.actionConditions =='" + actionConditions + "')]";
+            foundActiveRule = jsonpathcheck(defaultsAndMessages, checkPath); //Defect #28567 P800 - issue#3 double update issue on override
+            //if active rule is there and override is trying to exclude the item
+            if (foundActiveRule) { //Defect #29082 -  PROC5410S - rule 17 - double update issue on override of E28B-MEM32GB
+                removePath = "$..AutoUnSelect[?(@.appliedRuleId == '" + ruleId + "' && @.sourceConditions == '" + sourceConditions + "' && @.actionConditions == '" + actionConditions + "')]";
+                removePathCheck = jsonpathcheck(defaultsAndMessages, removePath);
+                if (removePathCheck) {
+                    jsonpathremove(defaultsAndMessages, removePath);
+                }
+
+            }
+            checkPath = "$..recommendations[?(@.appliedRuleId =='" + ruleId + "' && @.sourceConditions == '" + actionConditions + "' && @.actionConditions =='" + sourceConditions + "')]";
+            foundActiveRule = jsonpathcheck(defaultsAndMessages, checkPath); //Defect #28567 P800 - issue#3 double update issue on override
+            if (foundActiveRule) { //Defect #29082 -  PROC5410S - rule 17 - double update issue on override of E28B-MEM32GB
+                removePath = "$..AutoUnSelect[?(@.appliedRuleId == '" + ruleId + "' && @.sourceConditions == '" + actionConditions + "' && @.actionConditions == '" + sourceConditions + "')]";
+                removePathCheck = jsonpathcheck(defaultsAndMessages, removePath);
+                if (removePathCheck) {
+                    jsonpathremove(defaultsAndMessages, removePath);
+                }
+
+
+            }
+
+        }
+    }
+
+    //end of defect 28950*/
+    /*comination rules Defect #28743,28567 28546*/
+    recommendations = jsonget(defaultsAndMessages, "recommendations", "jsonarray", jsonarray());
+    recommendationsFinal = jsonarray();
+    indexes = range(jsonarraysize(recommendations));
+    dontApply = string[];
+    for i in indexes {
+        recommendation = jsonarrayget(recommendations, i, "json");
+        ruleId = jsonget(recommendation, "appliedRuleId", "string");
+        functionName = jsonget(recommendation, "functionName", "string");
+        actionFunctionName = jsonget(recommendation, "actionFunctionName", "string");
+        operator = jsonget(recommendation, "operator", "string");
+        sourceConditions = jsonget(recommendation, "sourceConditions", "string");
+        actionConditions = jsonget(recommendation, "actionConditions", "string");
+
+        if (functionName == "ALLTRUE" and actionFunctionName == "ANYTRUE" and operator == "EXCLUDES") {
+            //print "conflict>>>>"+ruleId;
+            sourceItem = jsonpathgetsingle(relationshipJSON, "$..relatedRules[?(@.ruleId == '" + ruleId + "' && ((@.sourceConditions == '" + sourceConditions + "' && @.actionConditions == '" + actionConditions + "') || (@.sourceConditions == '" + actionConditions + "' && @.actionConditions == '" + sourceConditions + "') ))].sourceItem", "string", "");
+            targetItem = jsonpathgetsingle(relationshipJSON, "$..relatedRules[?(@.ruleId == '" + ruleId + "' && ((@.sourceConditions == '" + sourceConditions + "' && @.actionConditions == '" + actionConditions + "') || (@.sourceConditions == '" + actionConditions + "' && @.actionConditions == '" + sourceConditions + "') ))].targetItem", "string", "");
+
+            //print sourceItem;
+            //print targetItem;
+            selectedAt = jsonpathgetsingle(userSelectionsJSON, "$.attributeAndValues[?(@.item == '" + sourceItem + "' && @.selectionSource == 'USER')].selectedAt", "integer", 0);
+            selectedAt1 = jsonpathgetsingle(userSelectionsJSON, "$.attributeAndValues[?(@.item == '" + targetItem + "' && @.selectionSource == 'USER')].selectedAt", "integer", 0);
+            pathCheck = jsonpathcheck(defaultsAndMessages, "$..recommendations[?(@.appliedRuleId !='" + ruleId + "' && @.operator == 'EXCLUDES' && @.functionName == 'ALLTRUE' && @.actionFunctionName == 'ANYTRUE' && @.sourceConditions == '" + actionConditions + "' && @.actionConditions == '" + sourceConditions + "')]");
+            //print selectedAt;
+            //print selectedAt1;
+            //print pathCheck;
+            ////Defect 29912 - override issue added selectedAt1 <> 0, selectedAt <> 0
+            if ((pathCheck and selectedAt1 > selectedAt and selectedAt1 <> 0 and selectedAt <> 0) or findinarray(dontApply, ruleId) <> -1) { //latest user selection is priority
+                append(dontApply, ruleId);
+                continue;
+            }
+        }
+        if (findinarray(messageRuleIDs, ruleId) <> -1) { // Defect#30152 PROC9500P-RIC when 409254 is selected The warning message that device requires is still showing as unsatisfied even though 409250 is now selected.
+            foundActiveRule = jsonpathcheck(defaultsAndMessages, "$..recommendations[?(@.actionConditions =='" + actionConditions + "' && @.operator == 'IMPLIES')]");
+            if (foundActiveRule) {
+                rulePos = findinarray(messageRuleIDs, ruleId);
+                remove(messageRuleIDs, rulePos);
+            }
+        }
+        jsonarrayappend(recommendationsFinal, recommendation);
+    }
+    /* end of combination rules*/
+    recommendations = recommendationsFinal;
+    /*ST Defect 28400 - sort the exclusions first*/
+    jsoncrit = jsonarray();
+    crit1 = json("{\"field\":\"setType\",\"order\":\"asc\"}"); //type default to string
+    crit2 = json("{\"field\":\"value\",\"order\":\"desc\"}"); //type default to string//Defect 28743 - to resolve override and direct selection conflict. first select 1st AU, override 2nd AU , 1st AU should be selected again
+    crit3 = json("{\"field\":\"actionConditions\",\"order\":\"asc\"}");
+    jsonarrayappend(jsoncrit, crit1);
+    jsonarrayappend(jsoncrit, crit2);
+    jsonarrayappend(jsoncrit, crit3);
+    recommendations = util.abo_jsonSort(recommendations, jsoncrit);
+    //-----------------------------New Code for ERROR Messages Start
+    constraintMessages = json();
+    for mRuleId in messageRuleIDs {
+        ruleDataObj = jsonget(rulesData, mRuleId, "json");
+        operator = jsonget(ruleDataObj, "operator");
+        msg = replace(jsonget(ruleDataObj, "ErrorMessage"), "IMPLIES", "REQUIRES");
+        if (msg <> "" AND NOT isnull(msg)) {
+            conditionsObj = jsonget(ruleDataObj, "conditions", "jsonarray");
+            indexes = range(jsonarraysize(conditionsObj));
+            foundActiveRule = false;
+            // Defect#30152 PROC9500P-RIC when 409254 is selected The warning message that device requires is still showing as unsatisfied even though 409250 is now selected.
+            for i in indexes {
+                condObj = jsonarrayget(conditionsObj, i, "json");
+                actionConditions = jsonget(condObj, "actionConditions", "string", "");
+                //print mRuleId+">>>>>>>>>>>>>>>>>>>>>>>>>>"+actionConditions ;
+                foundActiveRule = jsonpathcheck(defaultsAndMessages, "$..recommendations[?(@.actionConditions =='" + actionConditions + "' && @.operator == 'IMPLIES')]");
+                if (foundActiveRule) {
+                    break;
+                }
+                //print foundActiveRule;
+
+            }
+            if (foundActiveRule) {
+                continue;
+            }
+            for i in indexes {
+                condObj = jsonarrayget(conditionsObj, i, "json");
+                targetStepName = jsonget(condObj, "targetStepName", "string", "");
+                isExluded = jsonget(condObj, "isExluded", "boolean", false);
+                if (isExluded) {
+                    continue;
+                }
+                constraintMessagesArr = jsonget(constraintMessages, targetStepName, "jsonarray", jsonarray());
+                constraintMessage = json();
+                jsonput(constraintMessage, "appliedRuleId", mRuleId);
+                jsonput(constraintMessage, "operator", operator);
+                jsonput(constraintMessage, "message", msg);
+                jsonarrayappend(constraintMessagesArr, constraintMessage);
+                jsonput(constraintMessages, targetStepName, constraintMessagesArr);
+                break;
+            }
+        }
+
+    }
+    //jsonput(defaultsAndMessages,"AutoUnSelect",autodeselectjsarray);//Defect #29082 -double update issue - moved to line 2163
+    jsonput(defaultsAndMessages, "WaningMessages", Final_warning_messages_json);
+    jsonput(defaultsAndMessages, "recommendations", recommendations);
+    /* end of Defect 28400 */
+    logTime("Chaining Rule Unselect**11*", endTime - startTime);
+    if (NOT suppressWarnings) { // condition added by SureshThota for SuppressWarning
+        jsonput(defaultsAndMessages, "constraintMessages", constraintMessages);
+    }
+} else {
+    // CHG0097681: preowned serialized unit - force these keys empty, matching the types
+    // the normal path produces (recommendations & AutoUnSelect are jsonarray(); WaningMessages
+    // [existing key name/typo, not "WarningMessages"] & constraintMessages are json()).
+    // constraintMessages stays gated by suppressWarnings to match the normal path's behavior.
+    rowCount = 0;
+    jsonput(defaultsAndMessages, "recommendations", jsonarray());
+    jsonput(defaultsAndMessages, "AutoUnSelect", jsonarray());
+    jsonput(defaultsAndMessages, "WaningMessages", json());
+    if (NOT suppressWarnings) {
+        jsonput(defaultsAndMessages, "constraintMessages", json());
+    }
+}
+jsonput(results, "defaultsAndMessages", defaultsAndMessages);
+jsonput(results, "BOM", bomItemsArray);
+jsonput(results, "orderType", orderType);
+jsonput(results, "configureItem", configureItem);
+jsonput(results, "mainUnitEDPCode", mainUnitEDPCode); //Defect #32913
+jsonput(results, "Version", 2);
+jsonput(results, "rowCount", rowCount);
+jsonput(results, "OrgName", orgName);
+jsonput(results, "otherParams", otherParamsJSON);
+
+endTime = getcurrenttimeinmillis();
+logTime("Chaining Rule Unselect**111*", endTime - startTime);
+logTime("Rules New5 - Total", endTime - startTime1);
+return results;

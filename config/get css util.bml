@@ -1,0 +1,1776 @@
+/******************************************************************************************************/
+//Author: 		Gandeev Potnuru	
+//CR: CHG0097681: Hardware Configurations in CPQ
+//Functionality: Dynamic CSS for Configuration based on conditions
+/******************************************************************************************************/
+rules = json(constraintAndRecDataString);
+arrayAttributejson = json(arrayAttributeValueString);
+ruleAvailable = jsonpathgetsingle(rules, "$.defaultsAndMessages.constraintMessages", "string");
+retVal = stringbuilder();
+arraySetNames = string[];
+step = dict("string");
+ord = dict("string");
+paramsJSON = json(params);
+mainUnitEDPCode = jsonget(paramsJSON, "mainUnitEDPCode", "string", "");
+
+suppressWarnings = jsonget(paramsJSON, "suppressWarnings", "boolean", false); // added by sureshThota
+
+print "qweeerttyuuy";
+constraintJson = json();
+if (constraintAndRecDataString <> "") {
+	constraintJson = json(constraintAndRecDataString);
+}
+seq1 = string[];
+print ruleAvailable;
+sbappend(retVal, "<style>");
+/* Target rows that contain a disabled checkbox */
+sbappend(retVal, " .cpq-table-body-row:has(input[type='checkbox'][id*='select_optFeature']:disabled) > div:not([class*='col-override_optFeature']):not([class*='col-Override_optFeature']):not([class*='col-select_opt']) {opacity: 0.5;}");
+//sbappend(retVal," .cpq-table-body-row:has(input[type='checkbox'][id*='select_optFeature']:disabled) > div:not([class*='col-Override_optFeature']):not([class*='col-select_opt']) {opacity: 0.5;}");
+/*sbappend(retVal,"  .cpq-table-body-row:has(input[type='checkbox'][id*='select_optFeature']:disabled) > div:not([class*='col-override_optFeature']){filter: brightness(0.95)} .cpq-table-body-row:has(input[type='checkbox'][id*='select_optFeature']:disabled) > div:not([class*='col-Override_optFeature']){filter: brightness(0.95)} ");*/
+sbappend(retVal, ".price-panel{display:none !important;}");
+sbappend(retVal, ".cpq-table-element.oj-table-element.oj-table-horizontal-grid{border-left:1px solid #9e9e9e;}");
+sbappend(retVal, ".price-panel .oj-collapsible-header, .resource-panel .oj-collapsible-header{background-color:#0b5c8f !important;}");
+//sbappend(retVal,".cpq-table-body-row:has(input[type='checkbox'][id*='select_optFeature']:disabled) { opacity: 0.5;}");
+if (_user_type <> "FullAccess") {
+	sbappend(retVal, ".oj-tabbar-item-element > a[title='TroubleShoot']{display: none !important;}");
+
+}
+stickyCodes = jsonget(paramsJSON, "StickyCodes");
+inventoryLink = jsonget(paramsJSON, "BAJA_inventory");
+commerceAttr = jsonget(paramsJSON, "Commerce_Attrs", "string");
+
+// 07-30 defect #34875 added transaction number beside config status --Start
+if (jsonpathcheck(json(commerceAttr), "$.TransactionNumber")) {
+	sbappend(retVal, "span.page-progress.status-complete::after { content:'" + jsonget(json(commerceAttr), "TransactionNumber") + "'; margin-left:15px; width:100px; font-weight:bold;}");
+
+}
+// 07-30 defect #34875 added transaction number beside config status --End
+if ((commerceAttr == "" OR commerceAttr == "{}") OR jsonget(json(params), "warningsMessages") <> "") {
+	sbappend(retVal, "oj-button[name=\"add_to_favourites\"] { display: none;} oj-button[name=\"create_transaction\"] { display: none;}");
+}
+if (stickyCodes == "") {
+	sbappend(retVal, "#stickyCodesSummery-wrapper{display: none !important;}");
+}
+if (inventoryLink == "") {
+	sbappend(retVal, "#bAJA_inventory_HTML-wrapper{display: none !important;}");
+}
+
+sbappend(retVal, ".cpq-table-segment {overflow:unset !important;}");
+sbappend(retVal, ".dialog-stickyCodes .container {opacity: 0;position: absolute;top: 0;left: 0;width: 0;bottom: 0;transition: opacity 0.55s cubic-bezier(0.25, 0.8, 0.25, 1), width 0s linear;transition-delay: 0s, 0.55s;display: flex;flex-direction: row;align-items: center;justify-content: center;}");
+sbappend(retVal, ".dialog-stickyCodes .container  {position: absolute;top: 0;left: 0;right: 0;bottom: 0;background-color: rgba(0, 0, 0, 0.600);z-index: -1;}");
+sbappend(retVal, ".dialog-stickyCodes .container .content {background-color: #fff;padding: 30px;max-width: fit-content;margin: 30px;min-height: 25vh;max-height: fit-content;transform: scale(0);border-radius: 4px;transition: transform 0.4s ease;}");
+sbappend(retVal, ".dialog-stickyCodes .container .close {position: absolute;right: 8px;top: 8px;}");
+sbappend(retVal, ".dialog-stickyCodes .container .close label {cursor: pointer;}");
+sbappend(retVal, "input.dialog-stickyCodes-toggle {display: none;}");
+//sbappend(retVal,".oj-panel:not(.cpq-sidebar){overflow: unset !important;} ");
+//sbappend(retVal,".oj-panel{overflow: unset !important;} ");
+sbappend(retVal, ".resource-panel .oj-table-scroll-vertical:not(.oj-table-sticky) .oj-table-body{overflow-y: unset !important;}");
+sbappend(retVal, ".panel-col{overflow: unset !important;} ");
+sbappend(retVal, ".oj-offcanvas-outer-wrapper{ overflow: unset !important;} ");
+sbappend(retVal, ".allToggles{position: sticky !important; z-index:4; top:35vh;} ");
+sbappend(retVal, "#selectStep-wrapper{position: sticky !important; z-index:4; top:25vh;} ");
+jc = json(masterDataString);
+notes = jsonget(jc, "Notes", "string");
+if (notes == "") {
+	sbappend(retVal, ".notesForModel{display:none !important;}");
+}
+stepLength = range(jsonarraysize(jsonpathgetmultiple(jc, "$.stepNames..stepName")));
+for stepindex in stepLength {
+	print stepindex;
+	sbappend(retVal, ".dialog-" + string(stepindex + 1) + " .container {opacity: 0;position: absolute;top: 0;left: 0;width: 0;bottom: 0;transition: opacity 0.55s cubic-bezier(0.25, 0.8, 0.25, 1), width 0s linear;transition-delay: 0s, 0.55s;display: flex;flex-direction: row;align-items: center;justify-content: center;}");
+	sbappend(retVal, ".dialog-" + string(stepindex + 1) + " .container  {position: absolute;top: 0;left: 0;right: 0;bottom: 0;background-color: rgba(0, 0, 0, 0.600);z-index: -1;}");
+	sbappend(retVal, ".dialog-" + string(stepindex + 1) + " .container .content {background-color: #fff;padding: 30px;max-width: fit-content;margin: 30px;min-height: 25vh;max-height: fit-content;transform: scale(0);border-radius: 4px;transition: transform 0.4s ease;}");
+	sbappend(retVal, ".dialog-" + string(stepindex + 1) + " .container .close {position: absolute;right: 8px;top: 8px;}");
+	sbappend(retVal, ".dialog-" + string(stepindex + 1) + " .container .close label {cursor: pointer;}");
+	sbappend(retVal, ".feature-carousel-item .dialog-" + string(stepindex + 1) + " .container {opacity: 0;position: absolute;top: 0;left: 0;width: 0;bottom: 0;transition: opacity 0.55s cubic-bezier(0.25, 0.8, 0.25, 1), width 0s linear;transition-delay: 0s, 0.55s;display: flex;flex-direction: row;align-items: center;justify-content: center;}");
+	sbappend(retVal, ".feature-carousel-item .dialog-" + string(stepindex + 1) + " .container  {position: absolute;top: 0;left: 0;right: 0;bottom: 0;background-color: rgba(0, 0, 0, 0.600);}");
+	sbappend(retVal, ".feature-carousel-item .dialog-" + string(stepindex + 1) + " .container .content {background-color: #fff;padding: 30px;max-width: fit-content;margin: 30px;min-height: 25vh;max-height: fit-content;transform: scale(0);border-radius: 4px;transition: transform 0.4s ease; }");
+	sbappend(retVal, ".feature-carousel-item .dialog-" + string(stepindex + 1) + " .container .close {position: absolute;right: 8px;top: 8px;}");
+	sbappend(retVal, ".feature-carousel-item .dialog-" + string(stepindex + 1) + " .container .close label {cursor: pointer;}");
+	sbappend(retVal, ".feature-carousel-item input.dialog-" + string(stepindex + 1) + "-toggle { display: none;}");
+	sbappend(retVal, "input.dialog-" + string(stepindex + 1) + "-toggle {display: none;}");
+}
+
+if (ruleAvailable == "{}" AND (jsonget(json(params), "warningsMessages") == "")) {
+	sbappend(retVal, ".warningMessages{display:none !important;}");
+	sbappend(retVal, "div#errorMessages{ display:none;}");
+}
+
+retJSON = util.getModelFilter(params);
+isAccessible = jsonget(retJSON, "isAccessible", "boolean", false);
+isAccessibleAllFamily = jsonget(json(params), "isAccessible_AllFamily");
+discStatus = false;
+if (NOT isAccessible) {
+	if (isAccessibleAllFamily == "N" or isAccessibleAllFamily == "") {
+		discStatus = true; // 07-20 defect #35772 made true instead of false
+	} else {
+		discStatus = false; // 07-20 defect 35772 made false instead of true
+
+	}
+}
+//if(ruleAvailable <> "{}" OR mainUnitEDPCode=="" or (jsonget(json(params),"warningsMessages") <> "")){
+if ((ruleAvailable <> "{}" OR mainUnitEDPCode == "" or (jsonget(json(params), "warningsMessages") <> "") or discStatus) AND (NOT suppressWarnings)) { // added suppress condition by sureshthota
+	sbappend(retVal, ".action-_addToTxn{display:none !important;}");
+	sbappend(retVal, ".resource-panel{display:none !important;}");
+	sbappend(retVal, "span.page-progress.status-complete::before { content: 'Configuration incomplete'!important; color: red !important; margin-left: 15px !important; } .page-progress { width:140px; }");
+
+}
+/*if(ruleAvailable <> "{}" OR mainUnitEDPCode=="" or (jsonget(json(params),"warningsMessages") <> "") or discStatus){
+sbappend(retVal,"span.page-progress.status-complete::before { content: 'Configuration incomplete'!important; color: red !important; margin-left: 15px !important; } .page-progress { width:140px; }");
+}*/
+else {
+	sbappend(retVal, "span.page-progress.status-complete::before { content: 'Configuration completed' !important; color: green !important; margin-left: 15px !important; } .page-progress { width:200px; }");
+}
+sbappend(retVal, "#config-wrapper:has(.oj-message-detail) span.page-progress.status-complete::before { content: 'Configuration incomplete'!important; color: red !important; margin-left: 15px !important; } .page-progress { width:200px; }");
+b = 0;
+if (masterDataString <> "") {
+	master = json(masterDataString);
+	selectionFromMaster = json(attributeValueString);
+	u = jsonarraytostr(jsonpathgetmultiple(master, "$.stepNames..Order"));
+	y = substring(u, 1, len(u) - 1);
+	seq1 = split(y, ",");
+	for ea in seq1 {
+		stepNameValue = jsonpathgetsingle(master, "$.stepNames[" + string(b) + "].displayStepName", "string");
+		attributeNameValue = jsonpathgetsingle(master, "$.stepNames[" + string(b) + "].attributeName", "string");
+		arraysetNameValue = jsonpathgetsingle(master, "$.stepNames[" + string(b) + "].arraysetName", "string");
+		orderValue = jsonpathgetsingle(master, "$.stepNames[" + string(b) + "].Order", "string");
+		if ((stepNameValue <> "") AND (arraysetNameValue <> "")) {
+			append(arraySetNames, arraysetNameValue);
+			stepName = stepNameValue;
+			seq = orderValue;
+			arraySetName = arraysetNameValue;
+			put(ord, arraySetName, seq);
+			put(step, arraySetName, stepName);
+		} elif ((stepNameValue <> "") AND (attributeNameValue <> "")) {
+			append(arraySetNames, attributeNameValue);
+			stepName = stepNameValue;
+			seq = orderValue;
+			attributeName = attributeNameValue;
+			put(ord, attributeName, seq);
+			put(step, attributeName, stepName);
+		}
+		b = b + 1;
+	}
+	print arraySetNames;
+	k = 0;
+	for each in arraySetNames {
+		//sbappend(retVal, ".optionFeature"+string(k+1)+"Arrayset .oj-label-group h3{font-size:0; text-align:left;}");
+		//sbappend(retVal, ".optionFeature"+string(k+1)+"Arrayset .oj-label-group h3::before{font-size:14px;content:'"+get(step,arraySetNames[k])+"';}");
+		sbappend(retVal, "." + each + " .oj-label-group h3{font-size:0; text-align:left;}");
+		sbappend(retVal, "." + each + " .oj-label-group h3::before{font-size:14px;content:'" + get(step, arraySetNames[k]) + "';}");
+		k = k + 1;
+	}
+	for eack in arraySetNames {
+		pathify = "$.attributeAndValues[?(((@.arraySet == '" + eack + "')||(@.attribute == '" + eack + "'))&&(@.item != ''))]..arraySet";
+		if (jsonpathcheck(selectionFromMaster, pathify)) {
+			pathiz = "$.stepNames[?((@.arraysetName == '" + eack + "')||(@.attributeName == '" + eack + "'))].displayStepName";
+			stepLook = jsonpathgetsingle(master, pathiz);
+			print jsonpathgetsingle(master, pathiz);
+			print eack;
+			print "Success";
+			sbappend(retVal, "#selectStep a[title='" + stepLook + "']{ background-color:  #C5E1A5 !important;}");
+			sbappend(retVal, "#selectStep a[title='" + stepLook + "'] h5{ color: #526C4B !important; font-weight: bold !important;}");
+		}
+	}
+	sbappend(retVal, ".oj-table-data-cell.oj-selected{background-image:linear-gradient(#fff, #fff) !important;}");
+	sbappend(retVal, "#selectStep a[title='']{ display:none !important;}");
+	sbappend(retVal, "#pleaseChooseTheTypeOfTheProduct- a[title='None']{ display:none !important;}");
+}
+sbappend(retVal, "#_setoptionFeature1Arrayset-arrayset-table .cpq-table-select, #_setoptionFeature2Arrayset-arrayset-table .cpq-table-select, #_setoptionFeature3Arrayset-arrayset-table .cpq-table-select, #_setoptionFeature4Arrayset-arrayset-table .cpq-table-select, #_setoptionFeature5Arrayset-arrayset-table .cpq-table-select, #_setoptionFeature6Arrayset-arrayset-table .cpq-table-select, #_setoptionFeature7Arrayset-arrayset-table .cpq-table-select, #_setoptionFeature8Arrayset-arrayset-table .cpq-table-select, #_setoptionFeature9Arrayset-arrayset-table .cpq-table-select, #_setoptionFeature10Arrayset-arrayset-table .cpq-table-select, #_setoptionFeature1Arrayset-arraySet-summary, #_setoptionFeature2Arrayset-arraySet-summary, #_setoptionFeature3Arrayset-arraySet-summary, #_setoptionFeature4Arrayset-arraySet-summary, #_setoptionFeature5Arrayset-arraySet-summary, #_setoptionFeature6Arrayset-arraySet-summary, #_setoptionFeature7Arrayset-arraySet-summary, #_setoptionFeature8Arrayset-arraySet-summary, #_setoptionFeature9Arrayset-arraySet-summary, #_setoptionFeature10Arrayset-arraySet-summary{ display: none !important; }");
+sbappend(retVal, ".cpq-table-data-cell:focus { z-index: 1; }");
+
+optClass1Index = range(jsonget(arrayAttributejson, "optionFeature1ControlAttribute", "integer"));
+print optClass1Index;
+optClass2Index = range(jsonget(arrayAttributejson, "optionFeature2ControlAttribute", "integer"));
+optClass3Index = range(jsonget(arrayAttributejson, "optionFeature3ControlAttribute", "integer"));
+optClass4Index = range(jsonget(arrayAttributejson, "optionFeature4ControlAttribute", "integer"));
+optClass5Index = range(jsonget(arrayAttributejson, "optionFeature5ControlAttribute", "integer"));
+optClass6Index = range(jsonget(arrayAttributejson, "optionFeature6ControlAttribute", "integer"));
+optClass7Index = range(jsonget(arrayAttributejson, "optionFeature7ControlAttribute", "integer"));
+optClass8Index = range(jsonget(arrayAttributejson, "optionFeature8ControlAttribute", "integer"));
+optClass9Index = range(jsonget(arrayAttributejson, "optionFeature9ControlAttribute", "integer"));
+optClass10Index = range(jsonget(arrayAttributejson, "optionFeature10ControlAttribute", "integer"));
+optClass11Index = range(jsonget(arrayAttributejson, "optionFeature11ControlAttribute", "integer"));
+optClass12Index = range(jsonget(arrayAttributejson, "optionFeature12ControlAttribute", "integer"));
+optClass13Index = range(jsonget(arrayAttributejson, "optionFeature13ControlAttribute", "integer"));
+optClass14Index = range(jsonget(arrayAttributejson, "optionFeature14ControlAttribute", "integer"));
+optClass15Index = range(jsonget(arrayAttributejson, "optionFeature15ControlAttribute", "integer"));
+
+thumbnail_optFeature1arr = split(jsonget(arrayAttributejson, "thumbnail_optFeature1", "string"), "$,$");
+thumbnail_optFeature2arr = split(jsonget(arrayAttributejson, "thumbnail_optFeature2", "string"), "$,$");
+thumbnail_optFeature3arr = split(jsonget(arrayAttributejson, "thumbnail_optFeature3", "string"), "$,$");
+thumbnail_optFeature4arr = split(jsonget(arrayAttributejson, "thumbnail_optFeature4", "string"), "$,$");
+thumbnail_optFeature5arr = split(jsonget(arrayAttributejson, "thumbnail_optFeature5", "string"), "$,$");
+thumbnail_optFeature6arr = split(jsonget(arrayAttributejson, "thumbnail_optFeature6", "string"), "$,$");
+thumbnail_optFeature7arr = split(jsonget(arrayAttributejson, "thumbnail_optFeature7", "string"), "$,$");
+thumbnail_optFeature8arr = split(jsonget(arrayAttributejson, "thumbnail_optFeature8", "string"), "$,$");
+thumbnail_optFeature9arr = split(jsonget(arrayAttributejson, "thumbnail_optFeature9", "string"), "$,$");
+thumbnail_optFeature10arr = split(jsonget(arrayAttributejson, "thumbnail_optFeature10", "string"), "$,$");
+thumbnail_optFeature11arr = split(jsonget(arrayAttributejson, "thumbnail_optFeature11", "string"), "$,$");
+thumbnail_optFeature12arr = split(jsonget(arrayAttributejson, "thumbnail_optFeature12", "string"), "$,$");
+thumbnail_optFeature13arr = split(jsonget(arrayAttributejson, "thumbnail_optFeature13", "string"), "$,$");
+thumbnail_optFeature14arr = split(jsonget(arrayAttributejson, "thumbnail_optFeature14", "string"), "$,$");
+thumbnail_optFeature15arr = split(jsonget(arrayAttributejson, "thumbnail_optFeature15", "string"), "$,$");
+
+tips_optFeature1arr = split(jsonget(arrayAttributejson, "tips_optFeature1", "string"), "$,$");
+tips_optFeature2arr = split(jsonget(arrayAttributejson, "tips_optFeature2", "string"), "$,$");
+tips_optFeature3arr = split(jsonget(arrayAttributejson, "tips_optFeature3", "string"), "$,$");
+tips_optFeature4arr = split(jsonget(arrayAttributejson, "tips_optFeature4", "string"), "$,$");
+tips_optFeature5arr = split(jsonget(arrayAttributejson, "tips_optFeature5", "string"), "$,$");
+tips_optFeature6arr = split(jsonget(arrayAttributejson, "tips_optFeature6", "string"), "$,$");
+tips_optFeature7arr = split(jsonget(arrayAttributejson, "tips_optFeature7", "string"), "$,$");
+tips_optFeature8arr = split(jsonget(arrayAttributejson, "tips_optFeature8", "string"), "$,$");
+tips_optFeature9arr = split(jsonget(arrayAttributejson, "tips_optFeature9", "string"), "$,$");
+tips_optFeature10arr = split(jsonget(arrayAttributejson, "tips_optFeature10", "string"), "$,$");
+tips_optFeature11arr = split(jsonget(arrayAttributejson, "tips_optFeature11", "string"), "$,$");
+tips_optFeature12arr = split(jsonget(arrayAttributejson, "tips_optFeature12", "string"), "$,$");
+tips_optFeature13arr = split(jsonget(arrayAttributejson, "tips_optFeature13", "string"), "$,$");
+tips_optFeature14arr = split(jsonget(arrayAttributejson, "tips_optFeature14", "string"), "$,$");
+tips_optFeature15arr = split(jsonget(arrayAttributejson, "tips_optFeature15", "string"), "$,$");
+
+select_optFeature1arr = split(jsonget(arrayAttributejson, "select_optFeature1", "string"), "$,$");
+select_optFeature2arr = split(jsonget(arrayAttributejson, "select_optFeature2", "string"), "$,$");
+select_optFeature3arr = split(jsonget(arrayAttributejson, "select_optFeature3", "string"), "$,$");
+select_optFeature4arr = split(jsonget(arrayAttributejson, "select_optFeature4", "string"), "$,$");
+select_optFeature5arr = split(jsonget(arrayAttributejson, "select_optFeature5", "string"), "$,$");
+select_optFeature6arr = split(jsonget(arrayAttributejson, "select_optFeature6", "string"), "$,$");
+select_optFeature7arr = split(jsonget(arrayAttributejson, "select_optFeature7", "string"), "$,$");
+select_optFeature8arr = split(jsonget(arrayAttributejson, "select_optFeature8", "string"), "$,$");
+select_optFeature9arr = split(jsonget(arrayAttributejson, "select_optFeature9", "string"), "$,$");
+select_optFeature10arr = split(jsonget(arrayAttributejson, "select_optFeature10", "string"), "$,$");
+select_optFeature11arr = split(jsonget(arrayAttributejson, "select_optFeature11", "string"), "$,$");
+select_optFeature12arr = split(jsonget(arrayAttributejson, "select_optFeature12", "string"), "$,$");
+select_optFeature13arr = split(jsonget(arrayAttributejson, "select_optFeature13", "string"), "$,$");
+select_optFeature14arr = split(jsonget(arrayAttributejson, "select_optFeature14", "string"), "$,$");
+select_optFeature15arr = split(jsonget(arrayAttributejson, "select_optFeature15", "string"), "$,$");
+
+settype_optFeature1arr = split(jsonget(arrayAttributejson, "setType_optFeature1", "string"), "$,$");
+settype_optFeature2arr = split(jsonget(arrayAttributejson, "setType_optFeature2", "string"), "$,$");
+settype_optFeature3arr = split(jsonget(arrayAttributejson, "setType_optFeature3", "string"), "$,$");
+settype_optFeature4arr = split(jsonget(arrayAttributejson, "setType_optFeature4", "string"), "$,$");
+settype_optFeature5arr = split(jsonget(arrayAttributejson, "setType_optFeature5", "string"), "$,$");
+settype_optFeature6arr = split(jsonget(arrayAttributejson, "setType_optFeature6", "string"), "$,$");
+settype_optFeature7arr = split(jsonget(arrayAttributejson, "setType_optFeature7", "string"), "$,$");
+settype_optFeature8arr = split(jsonget(arrayAttributejson, "setType_optFeature8", "string"), "$,$");
+settype_optFeature9arr = split(jsonget(arrayAttributejson, "setType_optFeature9", "string"), "$,$");
+settype_optFeature10arr = split(jsonget(arrayAttributejson, "setType_optFeature10", "string"), "$,$");
+settype_optFeature11arr = split(jsonget(arrayAttributejson, "setType_optFeature11", "string"), "$,$");
+settype_optFeature12arr = split(jsonget(arrayAttributejson, "setType_optFeature12", "string"), "$,$");
+settype_optFeature13arr = split(jsonget(arrayAttributejson, "setType_optFeature13", "string"), "$,$");
+settype_optFeature14arr = split(jsonget(arrayAttributejson, "setType_optFeature14", "string"), "$,$");
+settype_optFeature15arr = split(jsonget(arrayAttributejson, "setType_optFeature15", "string"), "$,$");
+
+//(if(jsonpathcheck(arrayAttributejson,"$.ErrorMessage_optFeature1")){
+errorMessage_optFeature1arr = split(jsonget(arrayAttributejson, "errorMessage_optFeature1", "string"), "$,$");
+//}
+
+//if(jsonpathcheck(arrayAttributejson,"$.ErrorMessage_optFeature2")){
+errorMessage_optFeature2arr = split(jsonget(arrayAttributejson, "errorMessage_optFeature2", "string"), "$,$");
+//}
+//if(jsonpathcheck(arrayAttributejson,"$.ErrorMessage_optFeature3")){
+errorMessage_optFeature3arr = split(jsonget(arrayAttributejson, "errorMessage_optFeature3", "string"), "$,$");
+//}
+//if(jsonpathcheck(arrayAttributejson,"$.ErrorMessage_optFeature4")){
+errorMessage_optFeature4arr = split(jsonget(arrayAttributejson, "errorMessage_optFeature4", "string"), "$,$");
+//}
+//if(jsonpathcheck(arrayAttributejson,"$.ErrorMessage_optFeature5")){
+errorMessage_optFeature5arr = split(jsonget(arrayAttributejson, "errorMessage_optFeature5", "string"), "$,$");
+//}
+//if(jsonpathcheck(arrayAttributejson,"$.ErrorMessage_optFeature6")){
+errorMessage_optFeature6arr = split(jsonget(arrayAttributejson, "errorMessage_optFeature6", "string"), "$,$");
+//}
+//if(jsonpathcheck(arrayAttributejson,"$.ErrorMessage_optFeature7")){
+errorMessage_optFeature7arr = split(jsonget(arrayAttributejson, "errorMessage_optFeature7", "string"), "$,$");
+//}
+//if(jsonpathcheck(arrayAttributejson,"$.ErrorMessage_optFeature8")){
+errorMessage_optFeature8arr = split(jsonget(arrayAttributejson, "errorMessage_optFeature8", "string"), "$,$");
+//}
+//if(jsonpathcheck(arrayAttributejson,"$.ErrorMessage_optFeature9")){
+errorMessage_optFeature9arr = split(jsonget(arrayAttributejson, "errorMessage_optFeature9", "string"), "$,$");
+//}
+//if(jsonpathcheck(arrayAttributejson,"$.ErrorMessage_optFeature10")){
+errorMessage_optFeature10arr = split(jsonget(arrayAttributejson, "errorMessage_optFeature10", "string"), "$,$");
+//}
+//(if(jsonpathcheck(arrayAttributejson,"$.ErrorMessage_optFeature11")){
+errorMessage_optFeature11arr = split(jsonget(arrayAttributejson, "errorMessage_optFeature11", "string"), "$,$");
+//}
+
+//if(jsonpathcheck(arrayAttributejson,"$.ErrorMessage_optFeature12")){
+errorMessage_optFeature12arr = split(jsonget(arrayAttributejson, "errorMessage_optFeature12", "string"), "$,$");
+//}
+//if(jsonpathcheck(arrayAttributejson,"$.ErrorMessage_optFeature13")){
+errorMessage_optFeature13arr = split(jsonget(arrayAttributejson, "errorMessage_optFeature13", "string"), "$,$");
+//}
+//if(jsonpathcheck(arrayAttributejson,"$.ErrorMessage_optFeature14")){
+errorMessage_optFeature14arr = split(jsonget(arrayAttributejson, "errorMessage_optFeature14", "string"), "$,$");
+//}
+//if(jsonpathcheck(arrayAttributejson,"$.ErrorMessage_optFeature15")){
+errorMessage_optFeature15arr = split(jsonget(arrayAttributejson, "errorMessage_optFeature15", "string"), "$,$");
+//}
+
+print thumbnail_optFeature1arr;
+for s in optClass1Index {
+
+
+
+	if ((thumbnail_optFeature1arr[s] <> "") AND (thumbnail_optFeature1arr[s] <> "null") AND (not isnull(thumbnail_optFeature1arr[s]))) {
+		/*sbappend(retVal, "#_setoptionFeature1Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(s+1) + ") > div.col-thumbnail_optFeature1 > span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature1arr[s] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");*/
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature1 span[title=\"" + thumbnail_optFeature1arr[s] + "\"] span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature1arr[s] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");
+	} else {
+		sbappend(retVal, "#_setoptionFeature1Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(s + 1) + ") > div.col-thumbnail_optFeature1 > span::before{");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature1 span[title=\"\"]::before, .cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature1 span[title]::before {");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+	}
+
+	sbappend(retVal, "#_setoptionFeature1Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(s + 1) + ") > div.col-tips_optFeature1 > span {");
+	sbappend(retVal, "display:block;");
+	if (tips_optFeature1arr[s] <> "No tool tips available" and tips_optFeature1arr[s] <> "") {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important;");
+	} else {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png');");
+	}
+	sbappend(retVal, "height: 30%;");
+	sbappend(retVal, "background-repeat: no-repeat;");
+	sbappend(retVal, "}");
+	//if(tips_optFeature1arr[s] <> "No tool tips available" and tips_optFeature1arr[s] <> ""){
+	if (tips_optFeature1arr[s] <> "") {
+		sbappend(retVal, "#_setoptionFeature1Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(s + 1) + ") > div.col-tips_optFeature1 span::after {");
+		sbappend(retVal, "      content: attr(title);");
+		sbappend(retVal, "       display: none;");
+		sbappend(retVal, "        position: absolute;");
+		sbappend(retVal, "        transform: translateX(-50%);");
+		sbappend(retVal, "        background-color: #e4f310;");
+		sbappend(retVal, "        color: #fff;");
+		sbappend(retVal, "        padding: 5px;");
+		sbappend(retVal, "       border-radius: 5px;");
+		sbappend(retVal, "       white-space: nowrap;");
+		sbappend(retVal, "      font-size: 14px;}");
+
+		sbappend(retVal, "#_setoptionFeature1Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(s + 1) + ") > div.col-tips_optFeature1 span:hover::after {");
+		sbappend(retVal, "opacity: 1 !important;");
+		//sbappend(retVal, "content: attr(title) !important;");
+		//sbappend(retVal, "content: \""+tips_optFeature1arr[s]+"\" !important;");
+		sbappend(retVal, "position: absolute !important;");
+		sbappend(retVal, "top: 10% !important;");
+		sbappend(retVal, "left: 50% !important;");
+		sbappend(retVal, "transform: translateX(-50%) !important;");
+		sbappend(retVal, "background: #fff59d !important;");
+		sbappend(retVal, "color: #757575 !important;");
+		sbappend(retVal, "padding: 5px !important;");
+		sbappend(retVal, "border-radius: 5px !important;");
+		sbappend(retVal, "white-space: normal !important;");
+		sbappend(retVal, "width: 150px !important;");
+		sbappend(retVal, "transition: opacity 0.3s !important;");
+		sbappend(retVal, "pointer-events: none !important;");
+		sbappend(retVal, "z-index: 1 !important;");
+		sbappend(retVal, "word-wrap: break-word !important;");
+		sbappend(retVal, "word-break: break-word !important;}");
+		sbappend(retVal, "#_setoptionFeature1Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(s + 1) + ") > div.col-tips_optFeature1 span:hover::after {");
+		sbappend(retVal, " display: block;");
+		sbappend(retVal, " display: none;}");
+	}
+
+	sbappend(retVal, "#_setoptionFeature1Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(s + 1) + ") > div.col-setType_optFeature1{display:none;}");
+	sbappend(retVal, "#_setoptionFeature1Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(s + 1) + ") > div.col-setValue_optFeature1{display:none;}");
+	sbappend(retVal, "#_setoptionFeature1Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(s + 1) + ") > div.col-tips_optFeature1{");
+	sbappend(retVal, "position: relative;");
+	sbappend(retVal, " display: inline-block; }");
+
+
+
+	//if(_user_login =="srinivasa.gangavarapu@ricoh-usa.com"){
+	if (select_optFeature1arr[s] == "true") {
+		sbappend(retVal, "#_setoptionFeature1Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(s + 1) + ") > div.col-select_optFeature1 ::after {content: '';}");
+	}
+	if ((settype_optFeature1arr[s] == "forceSet" AND select_optFeature1arr[s] == "false") OR settype_optFeature1arr[s] == "DefaultRule") {
+		//sbappend(retVal, "#_setoptionFeature1Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(s+1) + ") > div.col-select_optFeature1 ::after {content: 'X';color: red;position: absolute;left: 50%;top: 15%;transform: translate(-50%, -50%);}");
+		//sbappend(retVal,"div.cpq-table-body-row:nth-child(" + string(s+1) + ") .col-select_optFeature1 input.arrayset-checkbox:after{content: 'X';color: red;position: absolute;left: 50%;top: 50%;transform: translate(-50%, -50%); font-size:30px !important;}");
+		sbappend(retVal, "#_setoptionFeature1Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(s + 1) + ") > div.col-Override_optFeature1 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature1arr[s] + "';");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 50% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+	if ((settype_optFeature1arr[s] == "set" OR settype_optFeature1arr[s] == "DefaultRule") AND select_optFeature1arr[s] == "true" AND errorMessage_optFeature1arr[s] <> "" AND NOT ISnull(errorMessage_optFeature1arr[s])) {
+		//sbappend(retVal, "#_setoptionFeature1Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(s+1) + ") > div.col-select_optFeature1 ::after {content: 'X';color: red;position: absolute;left: 50%;top: 15%;transform: translate(-50%, -50%);}");
+		//sbappend(retVal,"div.cpq-table-body-row:nth-child(" + string(s+1) + ") .col-select_optFeature1 input.arrayset-checkbox:after{content: 'X';color: red;position: absolute;left: 50%;top: 50%;transform: translate(-50%, -50%); font-size:30px !important;}");
+		sbappend(retVal, "#_setoptionFeature1Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(s + 1) + ") > div.select_optFeature1 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature1arr[s] + "';");
+		sbappend(retVal, "display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 600% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: pre-wrap!important; width: 300px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+	//}
+	k = k + 1;
+}
+for l in optClass2Index {
+
+	if ((thumbnail_optFeature2arr[l] <> "") AND (thumbnail_optFeature2arr[l] <> "null") AND (not isnull(thumbnail_optFeature2arr[l]))) {
+		/*sbappend(retVal, "#_setoptionFeature2Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(l+1) + ") > div.col-thumbnail_optFeature2 > span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature2arr[l] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");*/
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature2 span[title=\"" + thumbnail_optFeature2arr[l] + "\"] {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature2arr[l] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");
+	} else {
+		sbappend(retVal, "#_setoptionFeature2Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(l + 1) + ") > div.col-thumbnail_optFeature2 > span::before{");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumnail_optFeature2 span[title=\"\"]::before, .cpq-table-data-cell.oj-table-data-cell.col-thumnail_optFeature2 span[title]::before {");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+	}
+	sbappend(retVal, "#_setoptionFeature2Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(l + 1) + ") > div.col-tips_optFeature2 > span {");
+	sbappend(retVal, "display:block;");
+	if (tips_optFeature2arr[l] <> "No tool tips available" and tips_optFeature2arr[l] <> "") {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important;");
+	} else {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png');");
+	}
+	sbappend(retVal, "height: 30%;");
+	sbappend(retVal, "background-repeat: no-repeat;");
+	sbappend(retVal, "}");
+	//if(tips_optFeature2arr[l] <> "No tool tips available" and tips_optFeature2arr[l] <> ""){
+	if (tips_optFeature2arr[l] <> "") {
+
+		sbappend(retVal, "#_setoptionFeature2Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(l + 1) + ") > div.col-tips_optFeature2 span:hover::after {");
+		sbappend(retVal, "opacity: 1 !important;");
+		sbappend(retVal, "content: attr(title) !important;");
+		sbappend(retVal, "position: absolute !important;");
+		sbappend(retVal, "top: 10% !important;");
+		sbappend(retVal, "left: 50% !important;");
+		sbappend(retVal, "transform: translateX(-50%) !important;");
+		sbappend(retVal, "background: #fff59d !important;");
+		sbappend(retVal, "color: #757575 !important;");
+		sbappend(retVal, "padding: 5px !important;");
+		sbappend(retVal, "border-radius: 5px !important;");
+		sbappend(retVal, "white-space: normal !important;");
+		sbappend(retVal, "width: 150px !important;");
+		sbappend(retVal, "transition: opacity 0.3s !important;");
+		sbappend(retVal, "pointer-events: none !important;");
+		sbappend(retVal, "z-index: 1 !important;");
+		sbappend(retVal, "word-wrap: break-word !important;");
+		sbappend(retVal, "word-break: break-word !important;}");
+
+		sbappend(retVal, "#_setoptionFeature2Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(l + 1) + ") > div.col-tips_optFeature2 span:hover::after {");
+
+		//sbappend(retVal, "      content:\""+tips_optFeature2arr[l]+"\" !important;");	
+		sbappend(retVal, "       display: none;");
+		sbappend(retVal, "        position: absolute;");
+		sbappend(retVal, "        transform: translateX(-50%);");
+		sbappend(retVal, "        background-color: #e4f310;");
+		sbappend(retVal, "        color: #fff;");
+		sbappend(retVal, "        padding: 5px;");
+		sbappend(retVal, "       border-radius: 5px;");
+		sbappend(retVal, "       white-space: nowrap;");
+		sbappend(retVal, "      font-size: 14px;}");
+		sbappend(retVal, "#_setoptionFeature2Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(l + 1) + ") > div.col-tips_optFeature2 span:hover::after {");
+		sbappend(retVal, " display: block;");
+		sbappend(retVal, " display: none;}");
+	}
+
+	sbappend(retVal, "#_setoptionFeature2Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(l + 1) + ") > div.col-setType_optFeature2{display:none;}");
+	sbappend(retVal, "#_setoptionFeature2Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(l + 1) + ") > div.col-setValue_optFeature2{display:none;}");
+	sbappend(retVal, "#_setoptionFeature2Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(l + 1) + ") > div.col-tips_optFeature2{");
+	sbappend(retVal, "position: relative;");
+	sbappend(retVal, " display: inline-block; }");
+
+
+	//if(_user_login =="srinivasa.gangavarapu@ricoh-usa.com"){
+	if (select_optFeature2arr[l] == "true") {
+		sbappend(retVal, "#_setoptionFeature2Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(l + 1) + ") > div.col-select_optFeature2 ::after {content: '';}");
+	}
+	if ((settype_optFeature2arr[l] == "forceSet" AND select_optFeature2arr[l] == "false") OR settype_optFeature2arr[l] == "DefaultRule") {
+		sbappend(retVal, "#_setoptionFeature2Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(l + 1) + ") > div.col-Override_optFeature2 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature2arr[l] + "' !important;");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 50% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+	if ((settype_optFeature2arr[l] == "set" OR settype_optFeature2arr[l] == "DefaultRule") AND select_optFeature2arr[l] == "true" AND errorMessage_optFeature2arr[l] <> "" AND NOT ISnull(errorMessage_optFeature2arr[l])) {
+		sbappend(retVal, "#_setoptionFeature2Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(l + 1) + ") > div.col-select_optFeature2 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature2arr[l] + "' !important;");
+		sbappend(retVal, "display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 600% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: pre-wrap!important; width: 300px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+	//}
+	l = l + 1;
+}
+for m in optClass3Index {
+
+	if ((thumbnail_optFeature3arr[m] <> "") AND (thumbnail_optFeature3arr[m] <> "null") AND (not isnull(thumbnail_optFeature3arr[m]))) {
+		/*sbappend(retVal, "#_setoptionFeature3Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(m+1) + ") > div.col-thumbnail_optFeature3 > span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature3arr[m] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");*/
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature3 span[title=\"" + thumbnail_optFeature3arr[m] + "\"] {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature3arr[m] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");
+	} else {
+		sbappend(retVal, "#_setoptionFeature3Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(m + 1) + ") > div.col-thumbnail_optFeature3 > span::before{");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature3 span[title=\"\"]::before, .cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature3 span[title]::before {");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+	}
+	sbappend(retVal, "#_setoptionFeature3Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(m + 1) + ") > div.col-tips_optFeature3 > span {");
+	sbappend(retVal, "display:block;");
+	if (tips_optFeature3arr[m] <> "No tool tips available" and tips_optFeature3arr[m] <> "") {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important;");
+	} else {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png');");
+	}
+	sbappend(retVal, "height: 30%;");
+	sbappend(retVal, "background-repeat: no-repeat;");
+	sbappend(retVal, "}");
+	//if(tips_optFeature3arr[m] <> "No tool tips available" and tips_optFeature3arr[m] <> ""){
+	if (tips_optFeature3arr[m] <> "") {
+
+		sbappend(retVal, "#_setoptionFeature3Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(m + 1) + ") > div.col-tips_optFeature3 span::after {");
+		sbappend(retVal, "      content: attr(title);");
+		sbappend(retVal, "       display: none;");
+		sbappend(retVal, "        position: absolute;");
+		sbappend(retVal, "        transform: translateX(-50%);");
+		sbappend(retVal, "        background-color: #e4f310;");
+		sbappend(retVal, "        color: #fff;");
+		sbappend(retVal, "        padding: 5px;");
+		sbappend(retVal, "       border-radius: 5px;");
+		sbappend(retVal, "       white-space: nowrap;");
+		sbappend(retVal, "      font-size: 14px;}");
+
+		sbappend(retVal, "#_setoptionFeature3Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(m + 1) + ") > div.col-tips_optFeature3 span:hover::after {");
+		sbappend(retVal, "opacity: 1 !important;");
+		//sbappend(retVal, "content: \""+tips_optFeature3arr[m]+"\" !important;");
+		sbappend(retVal, "position: absolute !important;");
+		sbappend(retVal, "top: 10% !important;");
+		sbappend(retVal, "left: 50% !important;");
+		sbappend(retVal, "transform: translateX(-50%) !important;");
+		sbappend(retVal, "background: #fff59d !important;");
+		sbappend(retVal, "color: #757575 !important;");
+		sbappend(retVal, "padding: 5px !important;");
+		sbappend(retVal, "border-radius: 5px !important;");
+		sbappend(retVal, "white-space: normal !important;");
+		sbappend(retVal, "width: 150px !important;");
+		sbappend(retVal, "transition: opacity 0.3s !important;");
+		sbappend(retVal, "pointer-events: none !important;");
+		sbappend(retVal, "z-index: 1 !important;");
+		sbappend(retVal, "word-wrap: break-word !important;");
+		sbappend(retVal, "word-break: break-word !important;}");
+		sbappend(retVal, "#_setoptionFeature3Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(m + 1) + ") > div.col-tips_optFeature3 span:hover::after {");
+		sbappend(retVal, " display: block;");
+		sbappend(retVal, " display: none;}");
+	}
+
+	sbappend(retVal, "#_setoptionFeature3Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(m + 1) + ") > div.col-setType_optFeature3{display:none;}");
+	sbappend(retVal, "#_setoptionFeature3Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(m + 1) + ") > div.col-setValue_optFeature3{display:none;}");
+	sbappend(retVal, "#_setoptionFeature3Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(m + 1) + ") > div.col-tips_optFeature3{");
+	sbappend(retVal, "position: relative;");
+	sbappend(retVal, " display: inline-block; }");
+
+
+	//if(_user_login =="srinivasa.gangavarapu@ricoh-usa.com"){
+	if (select_optFeature3arr[m] == "true") {
+		sbappend(retVal, "#_setoptionFeature3Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(m + 1) + ") > div.col-select_optFeature3 ::after {content: '';}");
+	}
+	if ((settype_optFeature3arr[m] == "forceSet" AND select_optFeature3arr[m] == "false") OR settype_optFeature3arr[m] == "DefaultRule") {
+		sbappend(retVal, "#_setoptionFeature3Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(m + 1) + ") > div.col-Override_optFeature3 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content:'" + errorMessage_optFeature3arr[m] + "';");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 50% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+
+	}
+	if ((settype_optFeature3arr[m] == "set" OR settype_optFeature3arr[m] == "DefaultRule") AND select_optFeature3arr[m] == "true" AND errorMessage_optFeature3arr[m] <> "" AND NOT ISnull(errorMessage_optFeature3arr[m])) {
+		sbappend(retVal, "#_setoptionFeature3Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(m + 1) + ") > div.col-select_optFeature3 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content:'" + errorMessage_optFeature3arr[m] + "';");
+		sbappend(retVal, "display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 600% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: pre-wrap!important; width: 300px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+
+	}
+	//}
+	m = m + 1;
+}
+for n in optClass4Index {
+
+	if ((thumbnail_optFeature4arr[n] <> "") AND (thumbnail_optFeature4arr[n] <> "null") AND (not isnull(thumbnail_optFeature4arr[n]))) {
+		/*sbappend(retVal, "#_setoptionFeature4Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(n+1) + ") > div.col-thumbnail_optFeature4 > span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature4arr[n] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");*/
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature4 span[title=\"" + thumbnail_optFeature4arr[n] + "\"] {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature4arr[n] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");
+	} else {
+		sbappend(retVal, "#_setoptionFeature4Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(n + 1) + ") > div.col-thumbnail_optFeature4 > span::before{");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature4 span[title=\"\"]::before, .cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature4 span[title]::before {");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+	}
+	sbappend(retVal, "#_setoptionFeature4Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(n + 1) + ") > div.col-tips_optFeature4 > span {");
+	sbappend(retVal, "display:block;");
+	if (tips_optFeature4arr[n] <> "No tool tips available" and tips_optFeature4arr[n] <> "") {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important;");
+	} else {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png');");
+	}
+	sbappend(retVal, "height: 30%;");
+	sbappend(retVal, "background-repeat: no-repeat;");
+	sbappend(retVal, "}");
+	//if(tips_optFeature4arr[n] <> "No tool tips available" and tips_optFeature4arr[n] <> ""){
+	if (tips_optFeature4arr[n] <> "") {
+		sbappend(retVal, "#_setoptionFeature4Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(n + 1) + ") > div.col-tips_optFeature4 span:hover::after {");
+		sbappend(retVal, "opacity: 1 !important;");
+		sbappend(retVal, "content: attr(title) !important;");
+		sbappend(retVal, "position: absolute !important;");
+		sbappend(retVal, "top: 10% !important;");
+		sbappend(retVal, "left: 50% !important;");
+		sbappend(retVal, "transform: translateX(-50%) !important;");
+		sbappend(retVal, "background: #fff59d !important;");
+		sbappend(retVal, "color: #757575 !important;");
+		sbappend(retVal, "padding: 5px !important;");
+		sbappend(retVal, "border-radius: 5px !important;");
+		sbappend(retVal, "white-space: normal !important;");
+		sbappend(retVal, "width: 150px !important;");
+		sbappend(retVal, "transition: opacity 0.3s !important;");
+		sbappend(retVal, "pointer-events: none !important;");
+		sbappend(retVal, "z-index: 1 !important;");
+		sbappend(retVal, "word-wrap: break-word !important;");
+		sbappend(retVal, "word-break: break-word !important;}");
+		sbappend(retVal, "#_setoptionFeature4Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(n + 1) + ") > div.col-tips_optFeature4 span:hover::after {");
+		sbappend(retVal, " display: block;");
+		sbappend(retVal, " display: none;}");
+
+		sbappend(retVal, "#_setoptionFeature4Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(n + 1) + ") > div.col-tips_optFeature4 span::after {");
+		//sbappend(retVal, "content: \""+tips_optFeature4arr[n]+"\" !important;");	
+		sbappend(retVal, "       display: none;");
+		sbappend(retVal, "        position: absolute;");
+		sbappend(retVal, "        transform: translateX(-50%);");
+		sbappend(retVal, "        background-color: #e4f310;");
+		sbappend(retVal, "        color: #fff;");
+		sbappend(retVal, "        padding: 5px;");
+		sbappend(retVal, "       border-radius: 5px;");
+		sbappend(retVal, "       white-space: nowrap;");
+		sbappend(retVal, "      font-size: 14px;}");
+
+
+	}
+
+	sbappend(retVal, "#_setoptionFeature4Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(n + 1) + ") > div.col-setType_optFeature4{display:none;}");
+	sbappend(retVal, "#_setoptionFeature4Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(n + 1) + ") > div.col-setValue_optFeature4{display:none;}");
+	sbappend(retVal, "#_setoptionFeature4Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(n + 1) + ") > div.col-tips_optFeature4{");
+	sbappend(retVal, "position: relative;");
+	sbappend(retVal, " display: inline-block; }");
+
+
+	//if(_user_login =="srinivasa.gangavarapu@ricoh-usa.com"){
+	if (select_optFeature4arr[n] == "true") {
+		sbappend(retVal, "#_setoptionFeature4Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(n + 1) + ") > div.col-select_optFeature4 ::after {content: '';}");
+	}
+	if ((settype_optFeature4arr[n] == "forceSet" AND select_optFeature4arr[n] == "false") OR settype_optFeature4arr[n] == "DefaultRule") {
+		sbappend(retVal, "#_setoptionFeature4Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(n + 1) + ") > div.col-Override_optFeature4 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature4arr[n] + "';");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 50% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+	if ((settype_optFeature4arr[n] == "set" OR settype_optFeature4arr[n] == "DefaultRule") AND select_optFeature4arr[n] == "true" AND errorMessage_optFeature4arr[n] <> "" AND NOT ISnull(errorMessage_optFeature4arr[n])) {
+		sbappend(retVal, "#_setoptionFeature4Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(n + 1) + ") > div.col-select_optFeature4 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature4arr[n] + "';");
+		sbappend(retVal, "display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 600% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: pre-wrap!important; width: 300px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+
+	//}
+	n = n + 1;
+}
+for o in optClass5Index {
+
+	if ((thumbnail_optFeature5arr[o] <> "") AND (thumbnail_optFeature5arr[o] <> "null") AND (not isnull(thumbnail_optFeature5arr[o]))) {
+		/*sbappend(retVal, "#_setoptionFeature5Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(o+1) + ") > div.col-thumbnail_optFeature5 > span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature5arr[o] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");*/
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature5 span[title=\"" + thumbnail_optFeature5arr[o] + "\"] {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature5arr[o] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");
+	} else {
+		sbappend(retVal, "#_setoptionFeature5Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(o + 1) + ") > div.col-thumbnail_optFeature5 > span::before{");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature5 span[title=\"\"]::before, .cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature5 span[title]::before {");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+	}
+	sbappend(retVal, "#_setoptionFeature5Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(o + 1) + ") > div.col-tips_optFeature5 > span {");
+	sbappend(retVal, "display:block;");
+	if (tips_optFeature5arr[o] <> "No tool tips available" and tips_optFeature5arr[o] <> "") {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important;");
+	} else {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png');");
+	}
+	sbappend(retVal, "height: 30%;");
+	sbappend(retVal, "background-repeat: no-repeat;");
+	sbappend(retVal, "}");
+	//if(tips_optFeature5arr[o] <> "No tool tips available" and tips_optFeature5arr[o] <> ""){
+	if (tips_optFeature5arr[o] <> "") {
+
+		sbappend(retVal, "#_setoptionFeature5Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(o + 1) + ") > div.col-tips_optFeature5 span::after {");
+		sbappend(retVal, "      content: attr(title);");
+		sbappend(retVal, "       display: none;");
+		sbappend(retVal, "        position: absolute;");
+		sbappend(retVal, "        transform: translateX(-50%);");
+		sbappend(retVal, "        background-color: #e4f310;");
+		sbappend(retVal, "        color: #fff;");
+		sbappend(retVal, "        padding: 5px;");
+		sbappend(retVal, "       border-radius: 5px;");
+		sbappend(retVal, "       white-space: nowrap;");
+		sbappend(retVal, "      font-size: 14px;}");
+
+		sbappend(retVal, "#_setoptionFeature5Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(o + 1) + ") > div.col-tips_optFeature5 span:hover::after {");
+		sbappend(retVal, "opacity: 1 !important;");
+		//sbappend(retVal, "content: \""+tips_optFeature5arr[o]+"\" !important;");
+		sbappend(retVal, "position: absolute !important;");
+		sbappend(retVal, "top: 10% !important;");
+		sbappend(retVal, "left: 50% !important;");
+		sbappend(retVal, "transform: translateX(-50%) !important;");
+		sbappend(retVal, "background: #fff59d !important;");
+		sbappend(retVal, "color: #757575 !important;");
+		sbappend(retVal, "padding: 5px !important;");
+		sbappend(retVal, "border-radius: 5px !important;");
+		sbappend(retVal, "white-space: normal !important;");
+		sbappend(retVal, "width: 150px !important;");
+		sbappend(retVal, "transition: opacity 0.3s !important;");
+		sbappend(retVal, "pointer-events: none !important;");
+		//sbappend(retVal, "z-index: 2 !important;");
+		sbappend(retVal, "z-index: 1 !important;");
+		sbappend(retVal, "word-wrap: break-word !important;");
+		sbappend(retVal, "word-break: break-word !important;}");
+		sbappend(retVal, "#_setoptionFeature5Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(o + 1) + ") > div.col-tips_optFeature5 span:hover::after {");
+		sbappend(retVal, " display: block;");
+		sbappend(retVal, " display: none;}");
+	}
+
+	sbappend(retVal, "#_setoptionFeature5Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(o + 1) + ") > div.col-setType_optFeature5{display:none;}");
+	sbappend(retVal, "#_setoptionFeature5Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(o + 1) + ") > div.col-setValue_optFeature5{display:none;}");
+	sbappend(retVal, "#_setoptionFeature5Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(o + 1) + ") > div.col-tips_optFeature5{");
+	sbappend(retVal, "position: relative;");
+	sbappend(retVal, " display: inline-block; }");
+
+
+	//if(_user_login =="srinivasa.gangavarapu@ricoh-usa.com"){
+	if (select_optFeature5arr[o] == "true") {
+		sbappend(retVal, "#_setoptionFeature5Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(o + 1) + ") > div.col-select_optFeature5 ::after {content: '';}");
+	}
+	//Mohammad added DefaultRule in OR condition for C14
+	if ((settype_optFeature5arr[o] == "forceSet" AND select_optFeature5arr[o] == "false") OR settype_optFeature5arr[o] == "DefaultRule") {
+		sbappend(retVal, "#_setoptionFeature5Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(o + 1) + ") > div.col-Override_optFeature5 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature5arr[o] + "';");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 50% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+	if ((settype_optFeature5arr[o] == "set" OR settype_optFeature5arr[o] == "DefaultRule") AND select_optFeature5arr[o] == "true" AND errorMessage_optFeature5arr[o] <> "" AND NOT ISnull(errorMessage_optFeature5arr[o])) {
+		sbappend(retVal, "#_setoptionFeature5Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(o + 1) + ") > div.col-select_optFeature5 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature5arr[o] + "';");
+		sbappend(retVal, "display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 600% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: pre-wrap!important; width: 300px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+	//}
+
+}
+for p in optClass6Index {
+
+	if ((thumbnail_optFeature6arr[p] <> "") AND (thumbnail_optFeature6arr[p] <> "null") AND (not isnull(thumbnail_optFeature6arr[p]))) {
+		/*sbappend(retVal, "#_setoptionFeature6Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(p+1) + ") > div.col-thumbnail_optFeature6 > span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature6arr[p] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");*/
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature6 span[title=\"" + thumbnail_optFeature6arr[p] + "\"] {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature6arr[p] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");
+	} else {
+		sbappend(retVal, "#_setoptionFeature6Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(p + 1) + ") > div.col-thumbnail_optFeature6 > span::before{");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature6 span[title=\"\"]::before, .cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature6 span[title]::before {");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+	}
+	sbappend(retVal, "#_setoptionFeature6Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(p + 1) + ") > div.col-tips_optFeature6 > span {");
+	sbappend(retVal, "display:block;");
+	if (tips_optFeature6arr[p] <> "No tool tips available" and tips_optFeature6arr[p] <> "") {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important;");
+	} else {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png');");
+	}
+	sbappend(retVal, "height: 30%;");
+	sbappend(retVal, "background-repeat: no-repeat;");
+	sbappend(retVal, "}");
+	//	if(tips_optFeature6arr[p] <> "No tool tips available" and tips_optFeature6arr[p] <> ""){
+	if (tips_optFeature6arr[p] <> "") {
+
+		sbappend(retVal, "#_setoptionFeature6Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(p + 1) + ") > div.col-tips_optFeature6 span::after {");
+		sbappend(retVal, "      content: attr(title);");
+		sbappend(retVal, "       display: none;");
+		sbappend(retVal, "        position: absolute;");
+		sbappend(retVal, "        transform: translateX(-50%);");
+		sbappend(retVal, "        background-color: #e4f310;");
+		sbappend(retVal, "        color: #fff;");
+		sbappend(retVal, "        padding: 5px;");
+		sbappend(retVal, "       border-radius: 5px;");
+		sbappend(retVal, "       white-space: nowrap;");
+		sbappend(retVal, "      font-size: 14px;}");
+		sbappend(retVal, "#_setoptionFeature6Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(p + 1) + ") > div.col-tips_optFeature6 span:hover::after {");
+
+		sbappend(retVal, "opacity: 1 !important;");
+		//sbappend(retVal, "content: \""+tips_optFeature6arr[p]+"\" !important;");
+		sbappend(retVal, "position: absolute !important;");
+		sbappend(retVal, "top: 10% !important;");
+		sbappend(retVal, "left: 50% !important;");
+		sbappend(retVal, "transform: translateX(-50%) !important;");
+		sbappend(retVal, "background: #fff59d !important;");
+		sbappend(retVal, "color: #757575 !important;");
+		sbappend(retVal, "padding: 5px !important;");
+		sbappend(retVal, "border-radius: 5px !important;");
+		sbappend(retVal, "white-space: normal !important;");
+		sbappend(retVal, "width: 150px !important;");
+		sbappend(retVal, "transition: opacity 0.3s !important;");
+		sbappend(retVal, "pointer-events: none !important;");
+		sbappend(retVal, "z-index: 1 !important;");
+		sbappend(retVal, "word-wrap: break-word !important;");
+		sbappend(retVal, "word-break: break-word !important;}");
+		sbappend(retVal, "#_setoptionFeature6Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(p + 1) + ") > div.col-tips_optFeature6 span:hover::after {");
+		sbappend(retVal, " display: block;");
+		sbappend(retVal, " display: none;}");
+	}
+
+	sbappend(retVal, "#_setoptionFeature6Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(p + 1) + ") > div.col-setType_optFeature6{display:none;}");
+	sbappend(retVal, "#_setoptionFeature6Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(p + 1) + ") > div.col-setValue_optFeature6{display:none;}");
+	sbappend(retVal, "#_setoptionFeature6Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(p + 1) + ") > div.col-tips_optFeature6{");
+	sbappend(retVal, "position: relative;");
+	sbappend(retVal, " display: inline-block; }");
+
+
+	//if(_user_login =="srinivasa.gangavarapu@ricoh-usa.com"){
+	if (select_optFeature6arr[p] == "true") {
+		sbappend(retVal, "#_setoptionFeature6Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(p + 1) + ") > div.col-select_optFeature6 ::after {content: '';}");
+	}
+	if ((settype_optFeature6arr[p] == "forceSet" AND select_optFeature6arr[p] == "false") OR settype_optFeature6arr[p] == "DefaultRule") {
+		sbappend(retVal, "#_setoptionFeature6Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(p + 1) + ") > div.col-override_optFeature6 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature6arr[p] + "';");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 50% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+	if ((settype_optFeature6arr[p] == "set" OR settype_optFeature6arr[p] == "DefaultRule") AND select_optFeature6arr[p] == "true" AND errorMessage_optFeature6arr[p] <> "" AND NOT ISnull(errorMessage_optFeature6arr[p])) {
+		sbappend(retVal, "#_setoptionFeature6Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(p + 1) + ") > div.col-select_optFeature6 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature6arr[p] + "';");
+		sbappend(retVal, "display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 600% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: pre-wrap!important; width: 300px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+	//}
+
+}
+for q in optClass7Index {
+
+	if ((thumbnail_optFeature7arr[q] <> "") AND (thumbnail_optFeature7arr[q] <> "null") AND (not isnull(thumbnail_optFeature7arr[q]))) {
+		/*sbappend(retVal, "#_setoptionFeature7Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(q+1) + ") > div.col-thumbnail_optFeature7 > span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature7arr[q] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");*/
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature7 span[title=\"" + thumbnail_optFeature7arr[q] + "\"] {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature7arr[q] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");
+	} else {
+		sbappend(retVal, "#_setoptionFeature7Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(q + 1) + ") > div.col-thumbnail_optFeature7 > span::before{");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature7 span[title=\"\"]::before, .cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature7 span[title]::before {");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+	}
+
+
+	sbappend(retVal, "#_setoptionFeature7Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(q + 1) + ") > div.col-tips_optFeature7 > span {");
+	sbappend(retVal, "display:block;");
+	if (tips_optFeature7arr[q] <> "No tool tips available" and tips_optFeature7arr[q] <> "") {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important;");
+	} else {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png');");
+	}
+	sbappend(retVal, "height: 30%;");
+	sbappend(retVal, "background-repeat: no-repeat;");
+	sbappend(retVal, "}");
+	//		if(tips_optFeature7arr[q] <> "No tool tips available" and tips_optFeature7arr[q] <> ""){
+	if (tips_optFeature7arr[q] <> "") {
+
+		sbappend(retVal, "#_setoptionFeature7Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(q + 1) + ") > div.col-tips_optFeature7 span::after {");
+		sbappend(retVal, "      content: attr(title);");
+		sbappend(retVal, "       display: none;");
+		sbappend(retVal, "        position: absolute;");
+		sbappend(retVal, "        transform: translateX(-50%);");
+		sbappend(retVal, "        background-color: #e4f310;");
+		sbappend(retVal, "        color: #fff;");
+		sbappend(retVal, "        padding: 5px;");
+		sbappend(retVal, "       border-radius: 5px;");
+		sbappend(retVal, "       white-space: nowrap;");
+		sbappend(retVal, "      font-size: 14px;}");
+
+		sbappend(retVal, "#_setoptionFeature7Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(q + 1) + ") > div.col-tips_optFeature7 span:hover::after {");
+		sbappend(retVal, "opacity: 1 !important;");
+		//sbappend(retVal, "content: \""+tips_optFeature7arr[q]+"\" !important;");
+		sbappend(retVal, "position: absolute !important;");
+		sbappend(retVal, "top: 10% !important;");
+		sbappend(retVal, "left: 50% !important;");
+		sbappend(retVal, "transform: translateX(-50%) !important;");
+		sbappend(retVal, "background: #fff59d !important;");
+		sbappend(retVal, "color: #757575 !important;");
+		sbappend(retVal, "padding: 5px !important;");
+		sbappend(retVal, "border-radius: 5px !important;");
+		sbappend(retVal, "white-space: normal !important;");
+		sbappend(retVal, "width: 150px !important;");
+		sbappend(retVal, "transition: opacity 0.3s !important;");
+		sbappend(retVal, "pointer-events: none !important;");
+		sbappend(retVal, "z-index: 1 !important;");
+		sbappend(retVal, "word-wrap: break-word !important;");
+		sbappend(retVal, "word-break: break-word !important;}");
+		sbappend(retVal, "#_setoptionFeature7Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(q + 1) + ") > div.col-tips_optFeature7 span:hover::after {");
+		sbappend(retVal, " display: block;");
+		sbappend(retVal, " display: none;}");
+	}
+
+	sbappend(retVal, "#_setoptionFeature7Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(q + 1) + ") > div.col-setType_optFeature7{display:none;}");
+	sbappend(retVal, "#_setoptionFeature7Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(q + 1) + ") > div.col-setValue_optFeature7{display:none;}");
+	sbappend(retVal, "#_setoptionFeature7Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(q + 1) + ") > div.col-tips_optFeature7{");
+	sbappend(retVal, "position: relative;");
+	sbappend(retVal, " display: inline-block; }");
+
+
+	//if(_user_login =="srinivasa.gangavarapu@ricoh-usa.com"){
+	if (select_optFeature7arr[q] == "true") {
+		sbappend(retVal, "#_setoptionFeature7Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(q + 1) + ") > div.col-select_optFeature7 ::after {content: '';}");
+	}
+	if ((settype_optFeature7arr[q] == "forceSet" AND select_optFeature7arr[q] == "false") OR settype_optFeature7arr[q] == "DefaultRule") {
+		sbappend(retVal, "#_setoptionFeature7Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(q + 1) + ") > div.col-override_optFeature7 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature7arr[q] + "';");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 50% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+	if ((settype_optFeature7arr[q] == "set" OR settype_optFeature7arr[q] == "DefaultRule") AND select_optFeature7arr[q] == "true" AND errorMessage_optFeature7arr[q] <> "" AND NOT ISnull(errorMessage_optFeature7arr[q])) {
+		sbappend(retVal, "#_setoptionFeature7Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(q + 1) + ") > div.col-select_optFeature7 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature7arr[q] + "';");
+		sbappend(retVal, "display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 600% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: pre-wrap!important; width: 300px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+
+	//}
+
+}
+for r in optClass8Index {
+
+	if ((thumbnail_optFeature8arr[r] <> "") AND (thumbnail_optFeature8arr[r] <> "null") AND (not isnull(thumbnail_optFeature8arr[r]))) {
+		/*sbappend(retVal, "#_setoptionFeature8Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(r+1) + ") > div.col-thumbnail_optFeature8 > span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature8arr[r] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");*/
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature8 span[title=\"" + thumbnail_optFeature8arr[r] + "\"] {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature8arr[r] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");
+	} else {
+		sbappend(retVal, "#_setoptionFeature8Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(r + 1) + ") > div.col-thumbnail_optFeature8 > span::before{");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature8 span[title=\"\"]::before, .cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature8 span[title]::before {");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+	}
+	sbappend(retVal, "#_setoptionFeature8Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(r + 1) + ") > div.col-tips_optFeature8 > span {");
+	sbappend(retVal, "display:block;");
+	if (tips_optFeature8arr[r] <> "No tool tips available" and tips_optFeature8arr[r] <> "") {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important;");
+	} else {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png');");
+	}
+	sbappend(retVal, "height: 30%;");
+	sbappend(retVal, "background-repeat: no-repeat;");
+	sbappend(retVal, "}");
+	//	if(tips_optFeature8arr[r] <> "No tool tips available" and tips_optFeature8arr[r] <> ""){
+	if (tips_optFeature8arr[r] <> "") {
+		sbappend(retVal, "#_setoptionFeature8Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(r + 1) + ") > div.col-tips_optFeature8 span::after {");
+		sbappend(retVal, "      content: attr(title);");
+		sbappend(retVal, "       display: none;");
+		sbappend(retVal, "        position: absolute;");
+		sbappend(retVal, "        transform: translateX(-50%);");
+		sbappend(retVal, "        background-color: #e4f310;");
+		sbappend(retVal, "        color: #fff;");
+		sbappend(retVal, "        padding: 5px;");
+		sbappend(retVal, "       border-radius: 5px;");
+		sbappend(retVal, "       white-space: nowrap;");
+		sbappend(retVal, "      font-size: 14px;}");
+
+		sbappend(retVal, "#_setoptionFeature8Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(r + 1) + ") > div.col-tips_optFeature8 span:hover::after {");
+		sbappend(retVal, "opacity: 1 !important;");
+		//sbappend(retVal, "content: \""+tips_optFeature8arr[r]+"\" !important;");
+		sbappend(retVal, "position: absolute !important;");
+		sbappend(retVal, "top: 10% !important;");
+		sbappend(retVal, "left: 50% !important;");
+		sbappend(retVal, "transform: translateX(-50%) !important;");
+		sbappend(retVal, "background: #fff59d !important;");
+		sbappend(retVal, "color: #757575 !important;");
+		sbappend(retVal, "padding: 5px !important;");
+		sbappend(retVal, "border-radius: 5px !important;");
+		sbappend(retVal, "white-space: normal !important;");
+		sbappend(retVal, "width: 150px !important;");
+		sbappend(retVal, "transition: opacity 0.3s !important;");
+		sbappend(retVal, "pointer-events: none !important;");
+		sbappend(retVal, "z-index: 1 !important;");
+		sbappend(retVal, "word-wrap: break-word !important;");
+		sbappend(retVal, "word-break: break-word !important;}");
+		sbappend(retVal, "#_setoptionFeature8Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(r + 1) + ") > div.col-tips_optFeature8 span:hover::after {");
+		sbappend(retVal, " display: block;");
+		sbappend(retVal, " display: none;}");
+	}
+
+	sbappend(retVal, "#_setoptionFeature8Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(r + 1) + ") > div.col-setType_optFeature8{display:none;}");
+	sbappend(retVal, "#_setoptionFeature8Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(r + 1) + ") > div.col-setValue_optFeature8{display:none;}");
+	sbappend(retVal, "#_setoptionFeature8Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(r + 1) + ") > div.col-tips_optFeature8{");
+	sbappend(retVal, "position: relative;");
+	sbappend(retVal, " display: inline-block; }");
+
+	//if(_user_login =="srinivasa.gangavarapu@ricoh-usa.com"){
+	if (select_optFeature8arr[r] == "true") {
+		sbappend(retVal, "#_setoptionFeature8Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(r + 1) + ") > div.col-select_optFeature8 ::after {content: '';}");
+	}
+	if ((settype_optFeature8arr[r] == "forceSet" AND select_optFeature8arr[r] == "false") OR settype_optFeature8arr[r] == "DefaultRule") {
+		sbappend(retVal, "#_setoptionFeature8Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(r + 1) + ") > div.col-override_optFeature8 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature8arr[r] + "';");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 50% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+	if ((settype_optFeature8arr[r] == "set" OR settype_optFeature8arr[r] == "DefaultRule") AND select_optFeature8arr[r] == "true" AND errorMessage_optFeature8arr[r] <> "" AND NOT ISnull(errorMessage_optFeature8arr[r])) {
+
+		sbappend(retVal, "#_setoptionFeature8Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(r + 1) + ") > div.col-select_optFeature8 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature8arr[r] + "';");
+		sbappend(retVal, "display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 600% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: pre-wrap!important; width: 300px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+
+	//}
+
+
+}
+for w in optClass9Index {
+
+	if ((thumbnail_optFeature9arr[w] <> "") AND (thumbnail_optFeature9arr[w] <> "null") AND (not isnull(thumbnail_optFeature9arr[w]))) {
+		/*sbappend(retVal, "#_setoptionFeature9Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(w+1) + ") > div.col-thumbnail_optFeature9 > span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature9arr[w] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");*/
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature9 span[title=\"" + thumbnail_optFeature9arr[w] + "\"] {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature9arr[w] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");
+	} else {
+
+		sbappend(retVal, "#_setoptionFeature9Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(w + 1) + ") > div.col-thumbnail_optFeature9 > span::before{");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature9 span[title=\"\"]::before, .cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature9 span[title]::before {");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+	}
+	sbappend(retVal, "#_setoptionFeature9Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(w + 1) + ") > div.col-tips_optFeature9 > span {");
+	sbappend(retVal, "display:block;");
+	if (tips_optFeature9arr[w] <> "No tool tips available" and tips_optFeature9arr[w] <> "") {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important;");
+	} else {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png');");
+	}
+	sbappend(retVal, "height: 30%;");
+	sbappend(retVal, "background-repeat: no-repeat;");
+	sbappend(retVal, "}");
+	//	if(tips_optFeature9arr[w] <> "No tool tips available" and tips_optFeature9arr[w] <> ""){
+	if (tips_optFeature9arr[w] <> "") {
+		sbappend(retVal, "#_setoptionFeature9Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(w + 1) + ") > div.col-tips_optFeature9 span::after {");
+		sbappend(retVal, "      content: attr(title);");
+		sbappend(retVal, "       display: none;");
+		sbappend(retVal, "        position: absolute;");
+		sbappend(retVal, "        transform: translateX(-50%);");
+		sbappend(retVal, "        background-color: #e4f310;");
+		sbappend(retVal, "        color: #fff;");
+		sbappend(retVal, "        padding: 5px;");
+		sbappend(retVal, "       border-radius: 5px;");
+		sbappend(retVal, "       white-space: nowrap;");
+		sbappend(retVal, "      font-size: 14px;}");
+
+		sbappend(retVal, "#_setoptionFeature9Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(w + 1) + ") > div.col-tips_optFeature9 span:hover::after {");
+		sbappend(retVal, "opacity: 1 !important;");
+		//sbappend(retVal, "content: \""+tips_optFeature9arr[w]+"\" !important;");
+		sbappend(retVal, "position: absolute !important;");
+		sbappend(retVal, "top: 10% !important;");
+		sbappend(retVal, "left: 50% !important;");
+		sbappend(retVal, "transform: translateX(-50%) !important;");
+		sbappend(retVal, "background: #fff59d !important;");
+		sbappend(retVal, "color: #757575 !important;");
+		sbappend(retVal, "padding: 5px !important;");
+		sbappend(retVal, "border-radius: 5px !important;");
+		sbappend(retVal, "white-space: normal !important;");
+		sbappend(retVal, "width: 150px !important;");
+		sbappend(retVal, "transition: opacity 0.3s !important;");
+		sbappend(retVal, "pointer-events: none !important;");
+		sbappend(retVal, "z-index: 1 !important;");
+		sbappend(retVal, "word-wrap: break-word !important;");
+		sbappend(retVal, "word-break: break-word !important;}");
+		sbappend(retVal, "#_setoptionFeature9Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(w + 1) + ") > div.col-tips_optFeature9 span:hover::after {");
+		sbappend(retVal, " display: block;");
+		sbappend(retVal, " display: none;}");
+	}
+
+	sbappend(retVal, "#_setoptionFeature9Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(w + 1) + ") > div.col-setType_optFeature9{display:none;}");
+	sbappend(retVal, "#_setoptionFeature9Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(w + 1) + ") > div.col-setValue_optFeature9{display:none;}");
+	sbappend(retVal, "#_setoptionFeature9Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(w + 1) + ") > div.col-tips_optFeature9{");
+	sbappend(retVal, "position: relative;");
+	sbappend(retVal, " display: inline-block; }");
+
+
+	//if(_user_login =="srinivasa.gangavarapu@ricoh-usa.com"){
+	if (select_optFeature9arr[w] == "true") {
+		sbappend(retVal, "#_setoptionFeature9Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(w + 1) + ") > div.col-select_optFeature9 ::after {content: '';}");
+	}
+	//Mohammad added DefaultRule in OR condition for C14
+	if ((settype_optFeature9arr[w] == "forceSet" AND select_optFeature9arr[w] == "false") OR settype_optFeature9arr[w] == "DefaultRule") {
+		sbappend(retVal, "#_setoptionFeature9Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(w + 1) + ") > div.col-override_optFeature9 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature9arr[w] + "';");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 50% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+
+	}
+	if ((settype_optFeature9arr[w] == "set" OR settype_optFeature9arr[w] == "DefaultRule") AND select_optFeature9arr[w] == "true" AND errorMessage_optFeature9arr[w] <> "" AND NOT ISnull(errorMessage_optFeature9arr[w])) {
+		sbappend(retVal, "#_setoptionFeature9Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(w + 1) + ") > div.col-select_optFeature9 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature9arr[w] + "';");
+		sbappend(retVal, "display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 600% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: pre-wrap!important; width: 300px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+
+	}
+	//}
+
+
+}
+for z in optClass10Index {
+
+	if ((thumbnail_optFeature10arr[z] <> "") AND (thumbnail_optFeature10arr[z] <> "null") AND (not isnull(thumbnail_optFeature10arr[z]))) {
+		/*sbappend(retVal, "#_setoptionFeature10Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(z+1) + ") > div.col-thumbnail_optFeature10 > span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature10arr[z] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");*/
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature10 span[title=\"" + thumbnail_optFeature10arr[z] + "\"] {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature10arr[z] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");
+	} else {
+		sbappend(retVal, "#_setoptionFeature10Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(z + 1) + ") > div.col-thumbnail_optFeature10 > span::before{");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature10 span[title=\"\"]::before, .cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature10 span[title]::before {");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+	}
+	sbappend(retVal, "#_setoptionFeature10Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(z + 1) + ") > div.col-tips_optFeature10 > span {");
+	sbappend(retVal, "display:block;");
+	if (tips_optFeature10arr[z] <> "No tool tips available" and tips_optFeature10arr[z] <> "") {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important;");
+	} else {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png');");
+	}
+	sbappend(retVal, "height: 30%;");
+	sbappend(retVal, "background-repeat: no-repeat;");
+	sbappend(retVal, "}");
+	//	if(tips_optFeature10arr[z] <> "No tool tips available" and tips_optFeature10arr[z] <> ""){
+	if (tips_optFeature10arr[z] <> "") {
+		sbappend(retVal, "#_setoptionFeature10Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(z + 1) + ") > div.col-tips_optFeature10 span::after {");
+		sbappend(retVal, "      content: attr(title);");
+		sbappend(retVal, "       display: none;");
+		sbappend(retVal, "        position: absolute;");
+		sbappend(retVal, "        transform: translateX(-50%);");
+		sbappend(retVal, "        background-color: #e4f310;");
+		sbappend(retVal, "        color: #fff;");
+		sbappend(retVal, "        padding: 5px;");
+		sbappend(retVal, "       border-radius: 5px;");
+		sbappend(retVal, "       white-space: nowrap;");
+		sbappend(retVal, "      font-size: 14px;}");
+
+		sbappend(retVal, "#_setoptionFeature10Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(z + 1) + ") > div.col-tips_optFeature10 span:hover::after {");
+		sbappend(retVal, "opacity: 1 !important;");
+		//sbappend(retVal, "content: \""+tips_optFeature10arr[z]+"\" !important;");
+		sbappend(retVal, "position: absolute !important;");
+		sbappend(retVal, "top: 10% !important;");
+		sbappend(retVal, "left: 50% !important;");
+		sbappend(retVal, "transform: translateX(-50%) !important;");
+		sbappend(retVal, "background: #fff59d !important;");
+		sbappend(retVal, "color: #757575 !important;");
+		sbappend(retVal, "padding: 5px !important;");
+		sbappend(retVal, "border-radius: 5px !important;");
+		sbappend(retVal, "white-space: normal !important;");
+		sbappend(retVal, "width: 150px !important;");
+		sbappend(retVal, "transition: opacity 0.3s !important;");
+		sbappend(retVal, "pointer-events: none !important;");
+		sbappend(retVal, "z-index: 1 !important;");
+		sbappend(retVal, "word-wrap: break-word !important;");
+		sbappend(retVal, "word-break: break-word !important;}");
+		sbappend(retVal, "#_setoptionFeature10Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(z + 1) + ") > div.col-tips_optFeature10 span:hover::after {");
+		sbappend(retVal, " display: block;");
+		sbappend(retVal, " display: none;}");
+	}
+
+	sbappend(retVal, "#_setoptionFeature10Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(z + 1) + ") > div.col-setType_optFeature10{display:none;}");
+	sbappend(retVal, "#_setoptionFeature10Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(z + 1) + ") > div.col-setValue_optFeature10{display:none;}");
+	sbappend(retVal, "#_setoptionFeature10Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(z + 1) + ") > div.col-tips_optFeature10{");
+	sbappend(retVal, "position: relative;");
+	sbappend(retVal, " display: inline-block; }");
+
+
+	//if(_user_login =="srinivasa.gangavarapu@ricoh-usa.com"){
+	if (select_optFeature10arr[z] == "true") {
+		sbappend(retVal, "#_setoptionFeature10Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(z + 1) + ") > div.col-select_optFeature10 ::after {content: '';}");
+	}
+	if ((settype_optFeature10arr[z] == "forceSet" AND select_optFeature10arr[z] == "false") OR settype_optFeature10arr[z] == "DefaultRule") {
+		sbappend(retVal, "#_setoptionFeature10Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(z + 1) + ") > div.col-override_optFeature10 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature10arr[z] + "';");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 50% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+
+	}
+	if ((settype_optFeature10arr[z] == "set" OR settype_optFeature10arr[z] == "DefaultRule") AND select_optFeature10arr[z] == "true" AND errorMessage_optFeature10arr[z] <> "" AND NOT ISnull(errorMessage_optFeature10arr[z])) {
+		sbappend(retVal, "#_setoptionFeature10Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(z + 1) + ") > div.col-select_optFeature10 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "content: '" + errorMessage_optFeature10arr[z] + "';");
+		sbappend(retVal, "display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 600% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: pre-wrap!important; width: 300px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+
+	}
+	//}
+
+}
+for f in optClass11Index {
+	if ((thumbnail_optFeature11arr[f] <> "") AND (thumbnail_optFeature11arr[f] <> "null") AND (not isnull(thumbnail_optFeature11arr[f]))) {
+		/*sbappend(retVal, "#_setoptionFeature11Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(f+1) + ") > div.col-thumbnail_optFeature11 > span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature11arr[f] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");*/
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature11 span[title=\"" + thumbnail_optFeature11arr[f] + "\"] {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature11arr[f] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");
+	} else {
+		sbappend(retVal, "#_setoptionFeature11Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(f + 1) + ") > div.col-thumbnail_optFeature11 > span::before{");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature11 span[title=\"\"]::before, .cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature11 span[title]::before {");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+	}
+	sbappend(retVal, "#_setoptionFeature11Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(f + 1) + ") > div.col-tips_optFeature11 > span {");
+	sbappend(retVal, "display:block;");
+	if (tips_optFeature11arr[f] <> "No tool tips available" and tips_optFeature11arr[f] <> "") {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important;");
+	} else {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png');");
+	}
+	sbappend(retVal, "height: 30%;");
+	sbappend(retVal, "background-repeat: no-repeat;");
+	sbappend(retVal, "}");
+	//	if(tips_optFeature11arr[f] <> "No tool tips available" and tips_optFeature11arr[f] <> ""){
+	if (tips_optFeature11arr[f] <> "") {
+		sbappend(retVal, "#_setoptionFeature11Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(f + 1) + ") > div.col-tips_optFeature11 span::after {");
+		sbappend(retVal, "      content: attr(title);");
+		sbappend(retVal, "       display: none;");
+		sbappend(retVal, "        position: absolute;");
+		sbappend(retVal, "        transform: translateX(-50%);");
+		sbappend(retVal, "        background-color: #e4f310;");
+		sbappend(retVal, "        color: #fff;");
+		sbappend(retVal, "        padding: 5px;");
+		sbappend(retVal, "       border-radius: 5px;");
+		sbappend(retVal, "       white-space: nowrap;");
+		sbappend(retVal, "      font-size: 14px;}");
+
+		sbappend(retVal, "#_setoptionFeature11Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(f + 1) + ") > div.col-tips_optFeature11 span:hover::after {");
+		sbappend(retVal, "opacity: 1 !important;");
+		//sbappend(retVal, "content: \""+tips_optFeature11arr[f]+"\" !important;");
+		sbappend(retVal, "position: absolute !important;");
+		sbappend(retVal, "top: 10% !important;");
+		sbappend(retVal, "left: 50% !important;");
+		sbappend(retVal, "transform: translateX(-50%) !important;");
+		sbappend(retVal, "background: #fff59d !important;");
+		sbappend(retVal, "color: #757575 !important;");
+		sbappend(retVal, "padding: 5px !important;");
+		sbappend(retVal, "border-radius: 5px !important;");
+		sbappend(retVal, "white-space: normal !important;");
+		sbappend(retVal, "width: 150px !important;");
+		sbappend(retVal, "transition: opacity 0.3s !important;");
+		sbappend(retVal, "pointer-events: none !important;");
+		sbappend(retVal, "z-index: 1 !important;");
+		sbappend(retVal, "word-wrap: break-word !important;");
+		sbappend(retVal, "word-break: break-word !important;}");
+		sbappend(retVal, "#_setoptionFeature11Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(f + 1) + ") > div.col-tips_optFeature11 span:hover::after {");
+		sbappend(retVal, " display: block;");
+		sbappend(retVal, " display: none;}");
+	}
+
+	sbappend(retVal, "#_setoptionFeature11Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(f + 1) + ") > div.col-setType_optFeature11{display:none;}");
+	sbappend(retVal, "#_setoptionFeature11Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(f + 1) + ") > div.col-setValue_optFeature11{display:none;}");
+	sbappend(retVal, "#_setoptionFeature11Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(f + 1) + ") > div.col-tips_optFeature11{");
+	sbappend(retVal, "position: relative;");
+	sbappend(retVal, " display: inline-block; }");
+
+
+	//if(_user_login =="srinivasa.gangavarapu@ricoh-usa.com"){
+	if (select_optFeature11arr[f] == "true") {
+		sbappend(retVal, "#_setoptionFeature11Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(f + 1) + ") > div.col-select_optFeature11 ::after {content: '';}");
+	}
+	if ((settype_optFeature11arr[f] == "forceSet" AND select_optFeature11arr[f] == "false") OR settype_optFeature11arr[f] == "DefaultRule") {
+		sbappend(retVal, "#_setoptionFeature11Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(f + 1) + ") > div.col-Override_optFeature11 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature11arr[f] + "';");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 50% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+	if ((settype_optFeature11arr[f] == "set" OR settype_optFeature11arr[f] == "DefaultRule") AND select_optFeature11arr[f] == "true" AND errorMessage_optFeature11arr[f] <> "" AND NOT ISnull(errorMessage_optFeature11arr[f])) {
+		sbappend(retVal, "#_setoptionFeature11Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(f + 1) + ") > div.col-select_optFeature11 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature11arr[f] + "';");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 600% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+	//}
+	//f = f+1;
+}
+for g in optClass12Index {
+
+	if ((thumbnail_optFeature12arr[g] <> "") AND (thumbnail_optFeature12arr[g] <> "null") AND (not isnull(thumbnail_optFeature12arr[g]))) {
+		/*sbappend(retVal, "#_setoptionFeature12Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(g+1) + ") > div.col-thumbnail_optFeature12 > span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature12arr[g] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");*/
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature12 span[title=\"" + thumbnail_optFeature12arr[g] + "\"] {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature12arr[g] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");
+	} else {
+		sbappend(retVal, "#_setoptionFeature12Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(g + 1) + ") > div.col-thumbnail_optFeature12 > span::before{");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature12 span[title=\"\"]::before, .cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature12 span[title]::before {");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+	}
+	sbappend(retVal, "#_setoptionFeature12Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(g + 1) + ") > div.col-tips_optFeature12 > span {");
+	sbappend(retVal, "display:block;");
+	if (tips_optFeature12arr[g] <> "No tool tips available" and tips_optFeature12arr[g] <> "") {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important;");
+	} else {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png');");
+	}
+	sbappend(retVal, "height: 30%;");
+	sbappend(retVal, "background-repeat: no-repeat;");
+	sbappend(retVal, "}");
+	//	if(tips_optFeature12arr[g] <> "No tool tips available" and tips_optFeature12arr[g] <> ""){
+	if (tips_optFeature12arr[g] <> "") {
+
+		sbappend(retVal, "#_setoptionFeature12Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(g + 1) + ") > div.col-tips_optFeature12 span::after {");
+		sbappend(retVal, "      content: attr(title);");
+		sbappend(retVal, "       display: none;");
+		sbappend(retVal, "        position: absolute;");
+		sbappend(retVal, "        transform: translateX(-50%);");
+		sbappend(retVal, "        background-color: #e4f310;");
+		sbappend(retVal, "        color: #fff;");
+		sbappend(retVal, "        padding: 5px;");
+		sbappend(retVal, "       border-radius: 5px;");
+		sbappend(retVal, "       white-space: nowrap;");
+		sbappend(retVal, "      font-size: 14px;}");
+
+		sbappend(retVal, "#_setoptionFeature12Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(g + 1) + ") > div.col-tips_optFeature12 span:hover::after {");
+		sbappend(retVal, "opacity: 1 !important;");
+		//sbappend(retVal, "content: \""+tips_optFeature12arr[g]+"\" !important;");
+		sbappend(retVal, "position: absolute !important;");
+		sbappend(retVal, "top: 10% !important;");
+		sbappend(retVal, "left: 50% !important;");
+		sbappend(retVal, "transform: translateX(-50%) !important;");
+		sbappend(retVal, "background: #fff59d !important;");
+		sbappend(retVal, "color: #757575 !important;");
+		sbappend(retVal, "padding: 5px !important;");
+		sbappend(retVal, "border-radius: 5px !important;");
+		sbappend(retVal, "white-space: normal !important;");
+		sbappend(retVal, "width: 150px !important;");
+		sbappend(retVal, "transition: opacity 0.3s !important;");
+		sbappend(retVal, "pointer-events: none !important;");
+		sbappend(retVal, "z-index: 1 !important;");
+		sbappend(retVal, "word-wrap: break-word !important;");
+		sbappend(retVal, "word-break: break-word !important;}");
+		sbappend(retVal, "#_setoptionFeature12Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(g + 1) + ") > div.col-tips_optFeature12 span:hover::after {");
+		sbappend(retVal, " display: block;");
+		sbappend(retVal, " display: none;}");
+	}
+
+	sbappend(retVal, "#_setoptionFeature12Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(g + 1) + ") > div.col-setType_optFeature12{display:none;}");
+	sbappend(retVal, "#_setoptionFeature12Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(g + 1) + ") > div.col-setValue_optFeature12{display:none;}");
+	sbappend(retVal, "#_setoptionFeature12Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(g + 1) + ") > div.col-tips_optFeature12{");
+	sbappend(retVal, "position: relative;");
+	sbappend(retVal, " display: inline-block; }");
+
+
+	//if(_user_login =="srinivasa.gangavarapu@ricoh-usa.com"){
+	if (select_optFeature12arr[g] == "true") {
+		sbappend(retVal, "#_setoptionFeature12Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(g + 1) + ") > div.col-select_optFeature12 ::after {content: '';}");
+	}
+	if ((settype_optFeature12arr[g] == "forceSet" AND select_optFeature12arr[g] == "false") OR settype_optFeature12arr[g] == "DefaultRule") {
+		sbappend(retVal, "#_setoptionFeature12Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(g + 1) + ") > div.col-Override_optFeature12 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature12arr[g] + "' !important;");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 50% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+
+	}
+	if ((settype_optFeature12arr[g] == "set" OR settype_optFeature12arr[g] == "DefaultRule") AND select_optFeature12arr[g] == "true" AND errorMessage_optFeature12arr[g] <> "" AND NOT ISnull(errorMessage_optFeature12arr[g])) {
+		sbappend(retVal, "#_setoptionFeature12Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(g + 1) + ") > div.col-select_optFeature12 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature12arr[g] + "' !important;");
+		sbappend(retVal, "display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 600% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: pre-wrap!important; width: 300px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+
+	}
+	//}
+	//g = g+1;
+}
+for u in optClass13Index {
+
+	if ((thumbnail_optFeature13arr[u] <> "") AND (thumbnail_optFeature13arr[u] <> "null") AND (not isnull(thumbnail_optFeature13arr[u]))) {
+		/*sbappend(retVal, "#_setoptionFeature13Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(u+1) + ") > div.col-thumbnail_optFeature13 > span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature13arr[u] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");*/
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature13 span[title=\"" + thumbnail_optFeature13arr[u] + "\"] {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature13arr[u] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");
+	} else {
+		sbappend(retVal, "#_setoptionFeature13Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(u + 1) + ") > div.col-thumbnail_optFeature13 > span::before{");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature13 span[title=\"\"]::before, .cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature13 span[title]::before {");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+	}
+	sbappend(retVal, "#_setoptionFeature13Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(u + 1) + ") > div.col-tips_optFeature13 > span {");
+	sbappend(retVal, "display:block;");
+	if (tips_optFeature13arr[u] <> "No tool tips available" and tips_optFeature13arr[u] <> "") {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important;");
+	} else {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png');");
+	}
+	sbappend(retVal, "height: 30%;");
+	sbappend(retVal, "background-repeat: no-repeat;");
+	sbappend(retVal, "}");
+	//if(tips_optFeature13arr[u] <> "No tool tips available" and tips_optFeature13arr[u] <> ""){
+	if (tips_optFeature13arr[u] <> "") {
+
+		sbappend(retVal, "#_setoptionFeature13Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(u + 1) + ") > div.col-tips_optFeature13 span::after {");
+		sbappend(retVal, "      content: attr(title);");
+		sbappend(retVal, "       display: none;");
+		sbappend(retVal, "        position: absolute;");
+		sbappend(retVal, "        transform: translateX(-50%);");
+		sbappend(retVal, "        background-color: #e4f310;");
+		sbappend(retVal, "        color: #fff;");
+		sbappend(retVal, "        padding: 5px;");
+		sbappend(retVal, "       border-radius: 5px;");
+		sbappend(retVal, "       white-space: nowrap;");
+		sbappend(retVal, "      font-size: 14px;}");
+
+		sbappend(retVal, "#_setoptionFeature13Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(u + 1) + ") > div.col-tips_optFeature13 span:hover::after {");
+		sbappend(retVal, "opacity: 1 !important;");
+		//sbappend(retVal, "content: \""+tips_optFeature13arr[u]+"\" !important;");
+		sbappend(retVal, "position: absolute !important;");
+		sbappend(retVal, "top: 10% !important;");
+		sbappend(retVal, "left: 50% !important;");
+		sbappend(retVal, "transform: translateX(-50%) !important;");
+		sbappend(retVal, "background: #fff59d !important;");
+		sbappend(retVal, "color: #757575 !important;");
+		sbappend(retVal, "padding: 5px !important;");
+		sbappend(retVal, "border-radius: 5px !important;");
+		sbappend(retVal, "white-space: normal !important;");
+		sbappend(retVal, "width: 150px !important;");
+		sbappend(retVal, "transition: opacity 0.3s !important;");
+		sbappend(retVal, "pointer-events: none !important;");
+		sbappend(retVal, "z-index: 1 !important;");
+		sbappend(retVal, "word-wrap: break-word !important;");
+		sbappend(retVal, "word-break: break-word !important;}");
+		sbappend(retVal, "#_setoptionFeature13Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(u + 1) + ") > div.col-tips_optFeature3 span:hover::after {");
+		sbappend(retVal, " display: block;}");
+		sbappend(retVal, " display: none ;}");
+	}
+
+	sbappend(retVal, "#_setoptionFeature13Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(u + 1) + ") > div.col-setType_optFeature13{display:none;}");
+	sbappend(retVal, "#_setoptionFeature13Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(u + 1) + ") > div.col-setValue_optFeature13{display:none;}");
+	sbappend(retVal, "#_setoptionFeature13Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(u + 1) + ") > div.col-tips_optFeature13{");
+	sbappend(retVal, "position: relative;");
+	sbappend(retVal, " display: inline-block; }");
+
+
+	//if(_user_login =="srinivasa.gangavarapu@ricoh-usa.com"){
+	if (select_optFeature13arr[u] == "true") {
+		sbappend(retVal, "#_setoptionFeature13Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(u + 1) + ") > div.col-select_optFeature13 ::after {content: '';}");
+	}
+	if ((settype_optFeature13arr[u] == "forceSet" AND select_optFeature13arr[u] == "false") OR settype_optFeature13arr[u] == "DefaultRule") {
+		sbappend(retVal, "#_setoptionFeature13Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(u + 1) + ") > div.col-Override_optFeature13 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content:'" + errorMessage_optFeature13arr[u] + "';");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 50% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+	if ((settype_optFeature13arr[u] == "set" OR settype_optFeature13arr[u] == "DefaultRule") AND select_optFeature13arr[u] == "true" AND errorMessage_optFeature13arr[u] <> "" AND NOT ISnull(errorMessage_optFeature13arr[u])) {
+		sbappend(retVal, "#_setoptionFeature13Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(u + 1) + ") > div.col-select_optFeature13 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content:'" + errorMessage_optFeature13arr[u] + "';");
+		sbappend(retVal, "display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 600% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: pre-wrap!important; width: 300px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+
+	//}
+	//u = u+1;
+}
+for h in optClass14Index {
+
+	if ((thumbnail_optFeature14arr[h] <> "") AND (thumbnail_optFeature14arr[h] <> "null") AND (not isnull(thumbnail_optFeature14arr[h]))) {
+		/*sbappend(retVal, "#_setoptionFeature14Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(h+1) + ") > div.col-thumbnail_optFeature14 > span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature14arr[h] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");*/
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature14 span[title='\"" + thumbnail_optFeature14arr[h] + "\"'] {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature14arr[h] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");
+	} else {
+		sbappend(retVal, "#_setoptionFeature14Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(h + 1) + ") > div.col-thumbnail_optFeature14 > span::before{");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature14 span[title=\"\"]::before, .cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature14 span[title]::before {");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+	}
+	sbappend(retVal, "#_setoptionFeature14Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(h + 1) + ") > div.col-tips_optFeature14 > span {");
+	sbappend(retVal, "display:block;");
+	if (tips_optFeature14arr[h] <> "No tool tips available" and tips_optFeature14arr[h] <> "") {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important;");
+	} else {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png');");
+	}
+	sbappend(retVal, "height: 30%;");
+	sbappend(retVal, "background-repeat: no-repeat;");
+	sbappend(retVal, "}");
+	//if(tips_optFeature14arr[h] <> "No tool tips available" and tips_optFeature14arr[h] <> ""){
+	if (tips_optFeature14arr[h] <> "") {
+
+		sbappend(retVal, "#_setoptionFeature14Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(h + 1) + ") > div.col-tips_optFeature14 span::after {");
+		sbappend(retVal, "      content: attr(title);");
+		sbappend(retVal, "       display: none;");
+		sbappend(retVal, "        position: absolute;");
+		sbappend(retVal, "        transform: translateX(-50%);");
+		sbappend(retVal, "        background-color: #e4f310;");
+		sbappend(retVal, "        color: #fff;");
+		sbappend(retVal, "        padding: 5px;");
+		sbappend(retVal, "       border-radius: 5px;");
+		sbappend(retVal, "       white-space: nowrap;");
+		sbappend(retVal, "      font-size: 14px;}");
+
+		sbappend(retVal, "#_setoptionFeature14Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(h + 1) + ") > div.col-tips_optFeature14 span:hover::after {");
+		sbappend(retVal, "opacity: 1 !important;");
+		//sbappend(retVal, "content: \""+tips_optFeature14arr[h]+"\" !important;");
+		sbappend(retVal, "position: absolute !important;");
+		sbappend(retVal, "top: 10% !important;");
+		sbappend(retVal, "left: 50% !important;");
+		sbappend(retVal, "transform: translateX(-50%) !important;");
+		sbappend(retVal, "background: #fff59d !important;");
+		sbappend(retVal, "color: #757575 !important;");
+		sbappend(retVal, "padding: 5px !important;");
+		sbappend(retVal, "border-radius: 5px !important;");
+		sbappend(retVal, "white-space: normal !important;");
+		sbappend(retVal, "width: 150px !important;");
+		sbappend(retVal, "transition: opacity 0.3s !important;");
+		sbappend(retVal, "pointer-events: none !important;");
+		sbappend(retVal, "z-index: 1 !important;");
+		sbappend(retVal, "word-wrap: break-word !important;");
+		sbappend(retVal, "word-break: break-word !important;}");
+		sbappend(retVal, "#_setoptionFeature14Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(h + 1) + ") > div.col-tips_optFeature14 span:hover::after {");
+		sbappend(retVal, " display: block;");
+		sbappend(retVal, " display: none;}");
+	}
+	sbappend(retVal, "#_setoptionFeature14Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(h + 1) + ") > div.col-setType_optFeature14{display:none;}");
+	sbappend(retVal, "#_setoptionFeature14Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(h + 1) + ") > div.col-setValue_optFeature14{display:none;}");
+	sbappend(retVal, "#_setoptionFeature14Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(h + 1) + ") > div.col-tips_optFeature14{");
+	sbappend(retVal, "position: relative;");
+	sbappend(retVal, " display: inline-block; }");
+	//if(_user_login =="srinivasa.gangavarapu@ricoh-usa.com"){
+	if (select_optFeature14arr[h] == "true") {
+		sbappend(retVal, "#_setoptionFeature14Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(h + 1) + ") > div.col-select_optFeature14 ::after {content: '';}");
+	}
+	if ((settype_optFeature14arr[h] == "forceSet" AND select_optFeature14arr[h] == "false") OR settype_optFeature14arr[h] == "DefaultRule") {
+		sbappend(retVal, "#_setoptionFeature14Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(h + 1) + ") > div.col-Override_optFeature14 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature14arr[h] + "';");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 50% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+	if ((settype_optFeature14arr[h] == "set" OR settype_optFeature14arr[h] == "DefaultRule") AND select_optFeature14arr[h] == "true" AND errorMessage_optFeature14arr[h] <> "" AND NOT ISnull(errorMessage_optFeature14arr[h])) {
+		sbappend(retVal, "#_setoptionFeature14Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(h + 1) + ") > div.col-select_optFeature14 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature14arr[h] + "';");
+		sbappend(retVal, "display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 600% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: pre-wrap!important; width: 300px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+
+	//}
+	//h = h+1;
+}
+for t in optClass15Index {
+
+	if ((thumbnail_optFeature15arr[t] <> "") AND (thumbnail_optFeature15arr[t] <> "null") AND (not isnull(thumbnail_optFeature15arr[0]))) {
+		/*sbappend(retVal, "#_setoptionFeature15Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(t+1) + ") > div.col-thumbnail_optFeature15 > span {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature15arr[t] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");*/
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature15 span[title=\"" + thumbnail_optFeature15arr[t] + "\"] {");
+		sbappend(retVal, "display:block;");
+		sbappend(retVal, "content:url(\"" + thumbnail_optFeature15arr[t] + "\");");
+		sbappend(retVal, "width: 10em;");
+		sbappend(retVal, "height: 10em;");
+		sbappend(retVal, "}");
+	} else {
+		sbappend(retVal, "#_setoptionFeature15Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(t + 1) + ") > div.col-thumbnail_optFeature15 > span::before{");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+		sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature15 span[title=\"\"]::before, .cpq-table-data-cell.oj-table-data-cell.col-thumbnail_optFeature15 span[title]::before {");
+		sbappend(retVal, "content:'No Image'; font-size:14px;font-weight:bold;}");
+	}
+	sbappend(retVal, "#_setoptionFeature15Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(t + 1) + ") > div.col-tips_optFeature15 > span {");
+	sbappend(retVal, "display:block;");
+	if (tips_optFeature15arr[t] <> "No tool tips available" and tips_optFeature15arr[t] <> "") {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important;");
+	} else {
+		sbappend(retVal, "background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png');");
+	}
+	sbappend(retVal, "height: 30%;");
+	sbappend(retVal, "background-repeat: no-repeat;");
+	sbappend(retVal, "}");
+	//if(tips_optFeature15arr[t] <> "No tool tips available" and tips_optFeature15arr[t] <> ""){
+	if (tips_optFeature15arr[t] <> "") {
+		sbappend(retVal, "#_setoptionFeature15Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(t + 1) + ") > div.col-tips_optFeature15 span::after {");
+		sbappend(retVal, "      content: attr(title);");
+		sbappend(retVal, "       display: none;");
+		sbappend(retVal, "        position: absolute;");
+		sbappend(retVal, "        transform: translateX(-50%);");
+		sbappend(retVal, "        background-color: #e4f310;");
+		sbappend(retVal, "        color: #fff;");
+		sbappend(retVal, "        padding: 5px;");
+		sbappend(retVal, "       border-radius: 5px;");
+		sbappend(retVal, "       white-space: nowrap;");
+		sbappend(retVal, "      font-size: 14px;}");
+
+		sbappend(retVal, "#_setoptionFeature15Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(t + 1) + ") > div.col-tips_optFeature15 span:hover::after {");
+		sbappend(retVal, "opacity: 1 !important;");
+		//sbappend(retVal, "content: \""+tips_optFeature15arr[t]+"\" !important;");
+		sbappend(retVal, "position: absolute !important;");
+		sbappend(retVal, "top: 10% !important;");
+		sbappend(retVal, "left: 50% !important;");
+		sbappend(retVal, "transform: translateX(-50%) !important;");
+		sbappend(retVal, "background: #fff59d !important;");
+		sbappend(retVal, "color: #757575 !important;");
+		sbappend(retVal, "padding: 5px !important;");
+		sbappend(retVal, "border-radius: 5px !important;");
+		sbappend(retVal, "white-space: normal !important;");
+		sbappend(retVal, "width: 150px !important;");
+		sbappend(retVal, "transition: opacity 0.3s !important;");
+		sbappend(retVal, "pointer-events: none !important;");
+		sbappend(retVal, "z-index: 1 !important;");
+		sbappend(retVal, "word-wrap: break-word !important;");
+		sbappend(retVal, "word-break: break-word !important;}");
+		sbappend(retVal, "#_setoptionFeature15Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(t + 1) + ") > div.col-tips_optFeature15 span:hover::after {");
+		sbappend(retVal, " display: block;");
+		sbappend(retVal, " display: none;}");
+	}
+
+	sbappend(retVal, "#_setoptionFeature15Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(t + 1) + ") > div.col-setType_optFeature15{display:none;}");
+	sbappend(retVal, "#_setoptionFeature15Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(t + 1) + ") > div.col-setValue_optFeature15{display:none;}");
+	sbappend(retVal, "#_setoptionFeature15Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(t + 1) + ") > div.col-tips_optFeature5{");
+	sbappend(retVal, "position: relative;");
+	sbappend(retVal, " display: inline-block; }");
+
+
+
+	//if(_user_login =="srinivasa.gangavarapu@ricoh-usa.com"){
+	if (select_optFeature15arr[t] == "true") {
+		sbappend(retVal, "#_setoptionFeature15Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(t + 1) + ") > div.col-select_optFeature15 ::after {content: '';}");
+	}
+	if ((settype_optFeature15arr[t] == "forceSet" AND select_optFeature15arr[t] == "false") OR settype_optFeature15arr[t] == "DefaultRule") {
+		sbappend(retVal, "#_setoptionFeature15Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(t + 1) + ") > div.col-Override_optFeature15 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "      content: '" + errorMessage_optFeature15arr[t] + "';");
+		sbappend(retVal, "       display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 50% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: normal !important; width: 150px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+
+	if ((settype_optFeature15arr[t] == "set" OR settype_optFeature15arr[t] == "DefaultRule") AND select_optFeature15arr[t] == "true" AND errorMessage_optFeature15arr[t] <> "" AND NOT ISnull(errorMessage_optFeature15arr[t])) {
+		sbappend(retVal, "#_setoptionFeature15Arrayset-arrayset-table div.cpq-table-body > div.cpq-table-body-row:nth-child(" + string(t + 1) + ") > div.col-select_optFeature15 .arrayset-checkbox:hover::after{");
+		sbappend(retVal, "content: '" + errorMessage_optFeature15arr[t] + "';");
+		sbappend(retVal, "display: block;opacity: 1 !important; position: absolute !important; top: 120% !important; left: 600% !important; transform: translateX(-50%) !important; background: #fff59d !important; color: #757575 !important; padding: 5px !important; border-radius: 5px !important; white-space: pre-wrap!important; width: 300px !important; transition: opacity 0.3s !important; pointer-events: none !important; z-index: 1 !important; word-wrap: break-word !important; word-break: break-word !important; border-color: brown; border: 1px solid;}");
+	}
+}
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature1 span[title]:not([title='']):not([title='No tool tips available']),");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature2 span[title]:not([title='']):not([title='No tool tips available']),");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature3 span[title]:not([title='']):not([title='No tool tips available']),");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature4 span[title]:not([title='']):not([title='No tool tips available']),");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature5 span[title]:not([title='']):not([title='No tool tips available']),");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature6 span[title]:not([title='']):not([title='No tool tips available']),");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature7 span[title]:not([title='']):not([title='No tool tips available']),");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature8 span[title]:not([title='']):not([title='No tool tips available']),");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature9 span[title]:not([title='']):not([title='No tool tips available']),");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature10 span[title]:not([title='']):not([title='No tool tips available']),");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature11 span[title]:not([title='']):not([title='No tool tips available']),");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature12 span[title]:not([title='']):not([title='No tool tips available']),");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature13 span[title]:not([title='']):not([title='No tool tips available']),");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature14 span[title]:not([title='']):not([title='No tool tips available']),");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature15 span[title]:not([title='']):not([title='No tool tips available'])");
+sbappend(retVal, "{background-image:url('$BASE_PATH$/HardwareEquipment/available_tooltip.png') !important; display: block; background-repeat:no-repeat; height: 30%;}");
+
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature1 span[title=''], .cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature1 span[title='No Tool tips available'],");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature2 span[title=''], .cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature2 span[title='No Tool tips available'],");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature3 span[title=''], .cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature3 span[title='No Tool tips available'],");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature4 span[title=''], .cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature4 span[title='No Tool tips available'],");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature5 span[title=''], .cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature5 span[title='No Tool tips available'],");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature6 span[title=''], .cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature6 span[title='No Tool tips available'],");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature7 span[title=''], .cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature7 span[title='No Tool tips available'],");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature8 span[title=''], .cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature8 span[title='No Tool tips available'],");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature9 span[title=''], .cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature9 span[title='No Tool tips available'],");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature10 span[title=''], .cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature10 span[title='No Tool tips available'],");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature11 span[title=''], .cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature11 span[title='No Tool tips available'],");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature12 span[title=''], .cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature12 span[title='No Tool tips available'],");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature13 span[title=''], .cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature13 span[title='No Tool tips available'],");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature14 span[title=''], .cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature14 span[title='No Tool tips available'],");
+sbappend(retVal, ".cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature15 span[title=''], .cpq-table-data-cell.oj-table-data-cell.col-tips_optFeature15 span[title='No Tool tips available']");
+sbappend(retVal, "{background-image:url('$BASE_PATH$/HardwareEquipment/tooltip.png') !important; display: block; background-repeat:no-repeat; height: 30%;}");
+AttributeValueJSON = json(AttributeValueString);
+Serial_Number = "";
+selectedPreownedObj = jsonget(AttributeValueJSON, "selectedPreowned", "string", "");
+if (selectedPreownedObj <> "" AND not(isnull(selectedPreownedObj))) {
+	Serial_Number = jsonget(json(selectedPreownedObj), "Serial_Number", "string", "");
+}
+isPreownedSerialSelected = (Serial_Number <> "");
+// 10/03/2026 CHG0105953 added css to disable checkboxes for Seasoned product --Start
+if (isPreownedSerialSelected) {
+	sbappend(retVal, "input#select_optFeature1-undefined, input#select_optFeature2-undefined, input#select_optFeature3-undefined, input#select_optFeature4-undefined, input#select_optFeature5-undefined, input#select_optFeature6-undefined, input#select_optFeature7-undefined, input#select_optFeature8-undefined, input#select_optFeature9-undefined, input#select_optFeature10-undefined, input#select_optFeature11-undefined, input#select_optFeature12-undefined, input#select_optFeature13-undefined, input#select_optFeature14-undefined, input#select_optFeature15-undefined, input#Override_optFeature1-undefined, input#Override_optFeature2-undefined, input#Override_optFeature3-undefined, input#Override_optFeature4-undefined, input#Override_optFeature5-undefined, input#override_optFeature6-undefined, input#override_optFeature7-undefined, input#override_optFeature8-undefined, input#override_optFeature9-undefined, input#override_optFeature10-undefined, input#override_optFeature11-undefined, input#override_optFeature12-undefined, input#override_optFeature13-undefined, input#override_optFeature14-undefined, input#override_optFeature15-undefined { pointer-events: none !important; }");
+}
+// 10/03/2026 CHG0105953 added css to disable checkboxes for Seasoned product --End
+sbappend(retVal, "</style>");
+print sbtostring(retVal);
+return sbtostring(retVal);

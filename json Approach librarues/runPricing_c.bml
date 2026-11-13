@@ -1,0 +1,33 @@
+// Acts as the central entry point for the new Transaction Line pricing architecture.
+// Executes the single transaction-line loop and prepares lineDetailsJSON with the required data.
+// Uses the library functions to perform line, roll-up, and header pricing calculations based on user selections.
+// Updates the required transaction line, header, and arrayset values with the calculated results.
+
+
+
+
+/* Suresh Thota 22AUG2026
+ * Run Pricing
+ * ------------------------------
+ * Entry point for the new Transaction Line pricing architecture.
+ * Processes transaction lines through a single loop and prepares lineDetailsJSON
+ * for downstream pricing calculations and roll-ups.
+ * Orchestrates Line Pricing, Roll Up Pricing, Header Pricing, and Arrayset Population.
+ */
+ 
+returnVal = "";
+paramsJSON = json();
+
+//Prepare Header and Line Details JSON
+lineDetailsJSON = commerce.getQuoteData_c(jsontostr(paramsJSON));
+
+//Calculate product family spcific pricing/global pricing 
+lineDetailsJSON = commerce.linePricing_c(lineDetailsJSON) ; 
+
+//Calculate Header Totals/Quote Summary
+lineDetailsJSON = commerce.headerPricing_c(lineDetailsJSON);
+
+//Return values to commerce
+returnVal = commerce.commerceValuesReturn_c(lineDetailsJSON);
+
+return returnVal ;w

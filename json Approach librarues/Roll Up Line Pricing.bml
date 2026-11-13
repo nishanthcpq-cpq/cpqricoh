@@ -1,0 +1,230 @@
+// inputJSON = json();
+// jsonput(inputJSON,"debug",true);
+// return commerce.rollUpLinePricing_c(inputJSON);
+
+
+// This function will only roll up models. No header level or bottom of the hierarchy pricing should be here
+lineDetailsJSON = inputJSON;
+debug = jsonget(inputJSON, "debug", "boolean", false);
+if (debug) {
+	params = json();
+	lineDetailsJSON = commerce.getQuoteData_c(jsontostr(params));
+}
+pIOFlag = jsonpathgetsingle(lineDetailsJSON, "$.header.pIO_t_c", "boolean", false);
+modelJsonPath = "$..lineDetails[?(@._model_variable_name != '')]._document_number";
+modelDocNumbers = jsonarray();
+if (jsonpathcheck(lineDetailsJSON, modelJsonPath)) {
+	modelDocNumbers = jsonpathgetmultiple(lineDetailsJSON, modelJsonPath);
+}
+if (jsonarraysize(modelDocNumbers) > 0) {
+	indexes = range(jsonarraysize(modelDocNumbers));
+
+	for i in indexes {
+		modelDocNumber = jsonarrayget(modelDocNumbers, i);
+
+		path = "$..lineDetails[?(@._document_number == '" + modelDocNumber + "')]";
+		modelLineJSON = jsonpathgetsingle(lineDetailsJSON, path, "json");
+
+		//modelGroupSeq = jsonpathgetsingle(lineDetailsJSON, "$..lineDetails[?(@._document_number == '" + modelDocNumber + "')]._group_sequence_number", "string", "");
+		//modelGroupSeq = jsonget(lineDetailsJSON, "_group_sequence_number", "string", "");
+		//modelGroupSeq = jsonget(modelLineJSON, "_group_sequence_number", "string", "");
+		modelGroupSeq = jsonpathgetsingle(lineDetailsJSON, path + "._group_sequence_number", "string", "");
+		
+		itemtype =  jsonpathgetsingle(lineDetailsJSON, path + ".type_l", "string", "");
+		//print itemtype  ;
+		modelGroupSeqArr = split(modelGroupSeq, ".");
+		modelGroupSeqNo = modelGroupSeqArr[0];
+		//print modelGroupSeqNo;
+		//childItemPath = "$..lineDetails[?(@._group_sequence_number =~ /" + modelGroupSeqNo + ".*?/i && @._model_variable_name == '')]"; // to eliminitae  PS - Items
+		childItemPath = "$..lineDetails[?(@._group_sequence_number =~ /" + modelGroupSeqNo + ".*?/i && @._model_variable_name == '' && @.type_l == '"+ itemtype  +"' )]";
+		//childItemPath = "$..lineDetails[?(@._group_sequence_number =~ /" + modelGroupSeqNo + ".*?/i && @._model_variable_name == '' && @.type_l == 'HARDWARE' )]";
+
+		//print childItemPath ;
+		//variables       
+		modelListPrice = 0.0;
+		modelNetPrice = 0.0;
+		modelNetAmount = 0.0;
+		modelTotalPrice = 0.0;
+		modelunitSRPPrice = 0.0;
+		modelextSRPPrice = 0.0;
+		modelunitSalesCostPrice = 0.0;
+		modelcontractedUnitPricePrice = 0.0;
+		modelstretchPriceCurrencyPrice = 0.0;
+		modelunitSellingPricePrice = 0.0;
+		modelextSellingPricePrice = 0.0;
+		modelEXTNetPrice = 0.0;
+		modelNetAmount = 0.0;
+
+		//UnitSrp Price       
+		unitSRPpath = childItemPath + ".unitSRP_l";
+		if (jsonpathcheck(lineDetailsJSON, unitSRPpath)) {
+			modelunitSRPPrice = jsonpathgetsingle(lineDetailsJSON, unitSRPpath + ".sum()", "float", 0.0);
+			//modelListPrice = jsonpathgetsingle(lineDetailsJSON, listPricePath + ".sum()", "float", 0.0);
+			//print jsonpathgetmultiple(lineDetailsJSON, unitSRPpath);
+		}
+
+
+
+
+		//extunitsrp Price       
+		extSRPPath = childItemPath + ".extSRP_l";
+		if (jsonpathcheck(lineDetailsJSON, extSRPPath)) {
+			modelextSRPPrice = jsonpathgetsingle(lineDetailsJSON, extSRPPath + ".sum()", "float", 0.0);
+			//modelListPrice = jsonpathgetsingle(lineDetailsJSON, listPricePath + ".sum()", "float", 0.0);
+			//print jsonpathgetmultiple(lineDetailsJSON, extSRPPath);
+		}
+
+
+
+
+		//UnitSales  Price       
+		unitSalesCostPath = childItemPath + ".unitSalesCost_l";
+		if (jsonpathcheck(lineDetailsJSON, unitSalesCostPath)) {
+			modelunitSalesCostPrice = jsonpathgetsingle(lineDetailsJSON, unitSalesCostPath + ".sum()", "float", 0.0);
+			//modelListPrice = jsonpathgetsingle(lineDetailsJSON, listPricePath + ".sum()", "float", 0.0);
+			//print jsonpathgetmultiple(lineDetailsJSON, unitSalesCostPath);
+		}
+
+
+
+
+		//Unitcontract/target Price       
+		contractedUnitPricePath = childItemPath + ".contractedUnitPrice_l";
+		if (jsonpathcheck(lineDetailsJSON, contractedUnitPricePath)) {
+			modelcontractedUnitPricePrice = jsonpathgetsingle(lineDetailsJSON, contractedUnitPricePath + ".sum()", "float", 0.0);
+			//modelListPrice = jsonpathgetsingle(lineDetailsJSON, listPricePath + ".sum()", "float", 0.0);
+			//print jsonpathgetmultiple(lineDetailsJSON, contractedUnitPricePath);
+		}
+
+
+		//stretch Price       
+		stretchPriceCurrencyPath = childItemPath + ".stretchPriceCurrency_c";
+		if (jsonpathcheck(lineDetailsJSON, stretchPriceCurrencyPath)) {
+			modelstretchPriceCurrencyPrice = jsonpathgetsingle(lineDetailsJSON, stretchPriceCurrencyPath + ".sum()", "float", 0.0);
+			//modelListPrice = jsonpathgetsingle(lineDetailsJSON, listPricePath + ".sum()", "float", 0.0);
+			//print jsonpathgetmultiple(lineDetailsJSON, stretchPriceCurrencyPath);
+		}
+
+
+		//unitselling  Price       
+		unitSellingPricePath = childItemPath + ".unitSellingPrice_l";
+		if (jsonpathcheck(lineDetailsJSON, unitSellingPricePath)) {
+			modelunitSellingPricePrice = jsonpathgetsingle(lineDetailsJSON, unitSellingPricePath + ".sum()", "float", 0.0);
+			//modelListPrice = jsonpathgetsingle(lineDetailsJSON, listPricePath + ".sum()", "float", 0.0);
+			//print jsonpathgetmultiple(lineDetailsJSON, unitSellingPricePath);
+		}
+
+
+		//ext selling  Price       
+		extSellingPricePath = childItemPath + ".extSellingPrice_l";
+		if (jsonpathcheck(lineDetailsJSON, extSellingPricePath)) {
+			modelextSellingPricePrice = jsonpathgetsingle(lineDetailsJSON, extSellingPricePath + ".sum()", "float", 0.0);
+			//modelListPrice = jsonpathgetsingle(lineDetailsJSON, listPricePath + ".sum()", "float", 0.0);
+			//print jsonpathgetmultiple(lineDetailsJSON, extSellingPricePath);
+		}
+
+
+
+		/*
+				//List Price       
+				listPricePath = childItemPath + ".listPrice_l";
+				if (jsonpathcheck(lineDetailsJSON, listPricePath)) {
+					modelListPrice = jsonpathgetsingle(lineDetailsJSON, listPricePath + ".sum()", "float", 0.0);
+					//modelListPrice = jsonpathgetsingle(lineDetailsJSON, listPricePath + ".sum()", "float", 0.0);
+					//print jsonpathgetmultiple(lineDetailsJSON, listPricePath);
+				}*/
+
+		//ExtNet Price     
+		ExtnetPricePath = childItemPath + ".extNetPrice_l";
+		if (jsonpathcheck(lineDetailsJSON, ExtnetPricePath)) {
+			modelEXTNetPrice = jsonpathgetsingle(lineDetailsJSON, ExtnetPricePath + ".sum()", "float", 0.0);
+			//modelNetPrice = jsonpathgetsingle(lineDetailsJSON, ExtnetPricePath + ".sum()", "float", 0.0);
+		}
+		//UnitNet Amount        
+		netAmountPath = childItemPath + ".unitNetPrice_l";
+		if (jsonpathcheck(lineDetailsJSON, netAmountPath)) {
+			modelNetAmount = jsonpathgetsingle(lineDetailsJSON, netAmountPath + ".sum()", "float", 0.0);
+			//modelNetAmount = jsonpathgetsingle(lineDetailsJSON, netAmountPath + ".sum()", "float", 0.0);
+		}
+				netunitcostPath = childItemPath + ".unitCost_l";
+		if (jsonpathcheck(lineDetailsJSON, netAmountPath)) {
+			modelnetunitcostAmount = jsonpathgetsingle(lineDetailsJSON, netunitcostPath + ".sum()", "float", 0.0);
+			//modelNetAmount = jsonpathgetsingle(lineDetailsJSON, netunitcostPath + ".sum()", "float", 0.0);
+		}
+		/*		//Total price
+				totalPricePath = childItemPath + ".totalPrice_c";
+				if (jsonpathcheck(lineDetailsJSON, totalPricePath)) {
+					//modelTotalPrice = jsonpathgetsingle(lineDetailsJSON, totalPricePath + ".sum()", "float", 0.0);
+					modelTotalPrice = jsonpathgetsingle(lineDetailsJSON, totalPricePath + ".sum()", "float", 0.0); 
+				} */
+marginSalesCost  = 0.00 ; marginStandardCost  = 0.00 ;
+
+			if(modelNetAmount  <> 0.00 ){
+			marginSalesCost = ((modelNetAmount - modelunitSalesCostPrice ) / modelNetAmount ) * 100;
+			marginStandardCost = ((modelNetAmount - modelnetunitcostAmount ) / modelNetAmount) * 100;
+			}
+			
+		// Roll up calculated prices to the model line
+		jsonpathset(lineDetailsJSON, path + ".unitSRP_l", modelunitSRPPrice);
+		jsonpathset(lineDetailsJSON, path + ".extSRP_l", modelextSRPPrice);
+		jsonpathset(lineDetailsJSON, path + ".unitSalesCost_l", modelunitSalesCostPrice);
+		jsonpathset(lineDetailsJSON, path + ".contractedUnitPrice_l", modelcontractedUnitPricePrice);
+		jsonpathset(lineDetailsJSON, path + ".stretchPriceCurrency_c", modelstretchPriceCurrencyPrice);
+		jsonpathset(lineDetailsJSON, path + ".unitSellingPrice_l", modelunitSellingPricePrice);
+		jsonpathset(lineDetailsJSON, path + ".extSellingPrice_l", modelextSellingPricePrice);
+		jsonpathset(lineDetailsJSON, path + ".extNetPrice_l", modelEXTNetPrice);
+		jsonpathset(lineDetailsJSON, path + ".unitNetPrice_l", modelNetAmount);
+		jsonpathset(lineDetailsJSON, path + ".unitCost_l", modelnetunitcostAmount);
+		
+		jsonpathset(lineDetailsJSON, path + ".marginPercentagesalescost_l", marginSalesCost);
+		jsonpathset(lineDetailsJSON, path + ".marginPercentagestdscost_l", marginStandardCost);
+
+/*
+marginSalesCost = ((unitNetPrice - roundSalesCost ) / unitNetPrice ) * 100;
+marginStandardCost = ((unitNetPrice - roundUnitCost ) / unitNetPrice) * 100;
+
+ //salescost = contractedUnitPrice_l
+
+unitnet = unitNetPrice_l 
+
+roundSalesCost  = unitSalesCost_l
+
+roundUnitCost  = unitCost_l
+
+unitSellingPrice_l
+extSellingPrice_l
+
+extNetPrice_l
+*/
+
+		/*
+				jsonput(modelLineJSON, "listPrice_l", modelListPrice);
+				jsonput(modelLineJSON, "netPrice_l", modelNetPrice);
+				jsonput(modelLineJSON, "netAmount_l", modelNetAmount);
+				jsonput(modelLineJSON, "totalPrice_c", modelTotalPrice);
+
+
+	 			print("========== FINAL MODEL VALUES ==========");
+	 			print("MODEL DOC NUMBER: " + modelDocNumber);
+	 			print("MODEL GROUP: " + modelGroupSeq);
+	 			print("UNIT SRP: " + modelunitSRPPrice);
+	 			print("EXT SRP: " + modelextSRPPrice);
+	 			print("UNIT SALES COST: " + modelunitSalesCostPrice);
+	 			print("CONTRACTED UNIT PRICE: " + modelcontractedUnitPricePrice);
+	 			print("STRETCH PRICE: " + modelstretchPriceCurrencyPrice);
+	 			print("UNIT SELLING PRICE: " + modelunitSellingPricePrice);
+	 			print("EXT SELLING PRICE: " + modelextSellingPricePrice);
+	 			print("EXT NET PRICE: " + modelEXTNetPrice);
+	 			print("UNIT NET PRICE: " + modelNetAmount);
+
+
+
+
+
+		*/
+		//	print modelListPrice; 		print modelNetPrice; 		print modelNetAmount; 		print modelTotalPrice;
+
+	}
+}
+
+return lineDetailsJSON;

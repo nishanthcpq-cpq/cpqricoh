@@ -1,0 +1,42 @@
+// sample code to update chargeset array.
+combinedPriceListMenu = jsonget(pricingDocument, "combinedPriceListMenu_c", "string");
+lines = jsonget(pricingDocument, "lines", "jsonarray");
+edpCodesJSONArray = jsonpathgetmultiple(pricingDocument,"$..lines[?(@._partNumber != '')]._partNumber");
+edpCodesArr = util.convertJSONArrayToStringArray(edpCodesJSONArray);
+priceListEdpCode = json();
+resultSet = bmql("select * from $_currentMatrix where priceListName = $combinedPriceListMenu AND EDPCode in $edpCodesArr");
+print resultSet ;
+for rec in resultSet{
+	plCashJson = json();
+	cashPrice = get(rec,"cashPrice");
+	sMA	= get(rec,"sMA");
+	leaseBasisPrice = get(rec,"leaseBasisPrice");
+	jsonput(plCashJson,"cashPrice",cashPrice);
+	jsonput(plCashJson,"sMA",sMA);
+	jsonput(plCashJson,"leaseBasisPrice",leaseBasisPrice);
+	jsonput(priceListEdpCode,get(rec,"EDPCode"),plCashJson);
+}
+print priceListEdpCode;
+indexes = range(jsonarraysize(lines));
+
+for index in indexes {
+		
+		line = jsonarrayget(lines, index, "json");
+		partNumber = jsonget(line,"_partNumber","string");
+		if(partNumber == ""){
+			continue;
+		}
+		edpCodePath = "$." + partNumber;
+		if(jsonpathcheck(priceListEdpCode,edpCodePath)){
+			sMA = jsonpathgetsingle(priceListEdpCode,edpCodePath + ".sMA","float",0.0);
+			cashPrice = jsonpathgetsingle(priceListEdpCode,edpCodePath + ".cashPrice","float",0.0);
+			leaseBsisPrice = jsonpathgetsingle(priceListEdpCode,edpCodePath + ".leaseBasisPrice","float",0.0);
+			print sMA ;
+			jsonput(line, "hwCashPrice_c", cashPrice);
+			jsonput(line, "sMA_c", sMA);
+			jsonput(line, "hwLeaseBasisPrice_c", leaseBsisPrice);
+		}	   
+}  
+print "pricingDocument pricingDocument";
+print pricingDocument;
+return pricingDocument;

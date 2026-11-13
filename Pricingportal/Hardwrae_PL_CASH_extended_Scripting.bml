@@ -1,0 +1,90 @@
+lines = jsonget(pricingDocument, "lines", "jsonarray");
+customer = jsonget(pricingDocument, "customerSegment_c", "string");
+customerstart = jsonget(pricingDocument, "fYCustomerStartType_c", "string");
+fyproduction = jsonget(pricingDocument, "fYStartProductionZBA_c", "string");
+if (fyproduction == "false") {
+    fyproduction = "0";
+} else {
+    fyproduction = "1";
+}
+
+upliftarray = jsonpathgetmultiple(pricingDocument, "$..lines.[?(@.rCIPriceUpliftCategory_c != '')].rCIPriceUpliftCategory_c");
+
+stringarray = string[];
+arraysixe = range(jsonarraysize(upliftarray));
+for each in arraysixe {
+		upliftval = jsonarrayget(upliftarray, each) ;
+		if( findinarray( stringarray , upliftval ) == -1){
+    append(stringarray,upliftval  );
+}
+}
+upliftdict = dict("string");
+//print upliftarray;
+resultSet = bmql("select * from $_currentMatrix where customerSegment = $customer AND fYStartProductionZBA = $fyproduction  AND fYStartCustomerType = $customerstart  AND productCategory in  $stringarray  ");
+for result in resultSet {
+    HwTraget = (get(result, "hardwareTargetPrice"));
+    MinGp = (get(result, "minGPPercentage"));
+    Productfloor = (get(result, "productFloor"));// print Productfloor  + "      :";
+    productCategory  = get( result, "productCategory") ;
+    dictvalues = HwTraget + "@#$%"   + MinGp+ "@#$%" +  Productfloor  ;
+    put(upliftdict ,productCategory , dictvalues  ) ;
+}
+
+
+
+
+//  resultSet = bmql("select * from $_currentMatrix  ");
+//print resultSet ;
+if (not(isnull(lines)) and jsonarraysize(lines) > 0) {
+    indexes = range(jsonarraysize(lines));
+
+    for index in indexes {
+        // Safe access: double check array length before fetching
+        if (index < jsonarraysize(lines)) {
+            line = jsonarrayget(lines, index, "json");
+
+            partNumber = jsonget(line, "_partNumber", "string", "");
+            productcategory = jsonget(line, "rCIPriceUpliftCategory_c", "string", "");
+            chargeset = jsonget(line, "charges", "jsonarray", jsonarray());
+			
+            if (partNumber <> "") { // added empty check to skip model Line 
+                // Query the Pricing Data matrix
+               // resultSet = bmql("select * from $_currentMatrix where customerSegment = $customer AND fYStartProductionZBA = $fyproduction  AND fYStartCustomerType = $customerstart  AND productCategory = $productcategory  ");
+                //print resultSet ;
+                extvalues = split(get(upliftdict  ,productcategory ),"@#$%");
+                print "49-----";
+				print chargeset;
+               
+              //  print partNumber + " : " + productcategory + ":  ";  print extvalues ;
+                pricing = json();
+                pricing = jsonarrayget(chargeset, 0, "json");
+				print "59----ext-";
+				print extvalues [1];
+                jsonput(pricing, "hardwareTargetPrice_c", extvalues [0]);
+                jsonput(pricing, "minGPPercentage_c", extvalues [1]);
+               jsonput(pricing, "productFloor_c", extvalues [2]);
+                  jsonput(pricing, "productFloor_l_c", extvalues [2]);
+                 if( extvalues [2] <> ""){ 
+                 	pfloor = atof( extvalues [2]);
+                  //print pfloor ;
+                  }
+                 // jsonput(pricing, "bOMPrice_c", round(atof(extvalues [3]),2));
+                  jsonput(pricing, "bOMPrice_c", pfloor );
+
+				print "74-------------------------";print partNumber; print chargeset;
+                // jsonarrayappend(chargeset, pricing);
+                jsonput(line, "charges", chargeset);
+                
+
+
+            }
+        }
+    }
+}
+
+pricing = json();
+
+//sonput(pricing, "calculationInfo", pricingDocument);
+return pricingDocument;
+// return pricing;
+//customerSegment fYStartProductionZBA fYStartCustomerType hardwareTargetPrice minGPPercentage productFloor productCategory slNO

@@ -1,0 +1,61 @@
+// sample code to update chargeset array.
+
+priceList_Header = jsonget(pricingDocument, "combinedPriceListMenu_c", "string");
+lines = jsonget(pricingDocument, "lines", "jsonarray");
+indexes = range(jsonarraysize(lines));
+
+  for index in indexes {
+	  
+		sMA = "0.0";
+		cashPrice = "0.0";
+		leaseBsisPrice = "0.0";
+		//ChargeDataSet = jsonarray();
+		line = jsonarrayget(lines, index, "json");
+		partNumber = jsonget(line,"_partNumber","string");
+	    if (partNumber <> "") { // added empty check to skip model Line 
+		   // Currently Running at line , check the feasibility if we can get it out of the line loop.
+		   resultSet = bmql("select * from $_currentMatrix where priceList = $priceList_Header AND partNumber = $partNumber");
+		   chargeset = jsonget(line,"charges","jsonarray");
+		   //chargeIndices = range(jsonarraysize(chargeData));
+		   
+		   print "line2=======";
+		   print line;
+		   print "=======chargeSet2----";
+		   print chargeset;
+			if(jsonarraysize(chargeset) > 0){
+				for result in resultSet {
+					sMA = get(result, "sMA");
+					cashPrice = get(result, "cashPrice");
+					leaseBsisPrice = get(result, "leaseBasisPrice");
+					
+				}
+			print "32---- ";
+			
+			// If there are more than one entry in charge use below code blck.
+		   // for chargeIndex in chargeIndices{
+			   
+			   
+			   // charge = jsonarrayget(chargeData,chargeIndex,"json");
+			   
+			   // jsonpathset(charge,"$.sMA_CashPrice_c","20"); // get this value from table.
+			   // jsonarrayappend(ChargeDataSet,charge);
+		   // }
+				//jsonpathset(line,"$.charges",ChargeDataSet); 
+				
+				
+		   // For single Entry use below code block.
+		   
+				pricing = json();
+				pricing = jsonarrayget(chargeset, 0, "json");
+				jsonput(pricing, "sMA_CashPrice_c", sMA);
+				jsonput(pricing, "cashPrice_c", cashPrice);
+				jsonput(pricing, "leaseBasisPrice_c", leaseBsisPrice);
+				jsonput(line, "charges", chargeset);
+				print chargeset;
+				print "---==----==---";
+		   }
+		}  
+  }
+  
+  
+  return pricingDocument;

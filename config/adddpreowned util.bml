@@ -1,0 +1,247 @@
+inputJSON = json();
+if (inputdata == "") {
+    return "";
+}
+system = lower(_supplier_company_name);
+modelDetailsDict = dict("string");
+inputJSON = json(inputdata);
+bsId = jsonget(inputJSON, "bsId", "integer");
+equipmentType = jsonget(inputJSON, "equipmentType", "string", "");
+finalPayload = json();
+errorMsg = string[];
+endPointURL = "";
+authString = "";
+// Get Username and Password
+recordSet = bmql("select * from INT_SYSTEM_DETAILS where InstancesName = $system");
+for rec in recordSet {
+    //endPointURL = get(credDetails, "RestEndpoint");
+    username = get(rec, "Username");
+    userpwd = get(rec, "Password");
+    authString = "Basic " + encodebase64(username + ":" + userpwd);
+}
+//Header dictionary details for rest api call
+headers = dict("string");
+//Header dictionary details for rest api call
+put(headers, "Content-Type", "application/json");
+//put(headers, "Authorization", authString);
+put(headers, "Accept", "application/json");
+
+
+if (upper(equipmentType) == "USED") {
+    //finalPayload = json
+    payloadData = jsonget(inputJSON, "payloadData", "jsonarray");
+    payloadDataNew = jsonarray();
+    selections = jsonarray();
+    endPointURL = "https://" + system + ".bigmachines.com/rest/v18/commerceDocumentsOraclecpqoTransaction/" + string(bsId) + "/transactionLine";
+    indexes = range(jsonarraysize(payloadData));
+    for i in indexes {
+        productJson = jsonarrayget(payloadData, i, "json");
+        itemJson = json();
+        jsonput(itemJson, "_part_number", jsonget(productJson, "_part_number"));
+        jsonput(itemJson, "_price_book_var_name", "_default_price_book");
+
+        response = urldata(endPointURL, "POST", headers, jsontostr(itemJson), 90000);
+        //print "response response response ";
+        //print response ;
+        if (get(response, "Status-Code") == "200") {
+            responseJSON = json(get(response, "Message-Body"));
+            //responseJSON = json(messageBody);
+            docNumber = jsonget(responseJSON, "_document_number");
+            jsonput(productJson, "_document_number", docNumber);
+            jsonput(productJson, "_price_book_var_name", "_default_price_book");
+            jsonput(productJson, "_is_line_item_mandatory", true);
+            jsonput(productJson, "modelName_l_c", "Used Product"); //36436
+            jsonarrayappend(payloadDataNew, productJson);
+            //jsonarrayappend(selections,"transactionLine/"+docNumber);
+        } else {
+            msg = get(response, "Error-Message");
+            append(errorMsg, msg);
+        }
+    }
+    documents = json();
+    transactionLine = json();
+    //jsonput(transactionLine,"items",payloadData );
+    jsonput(transactionLine, "items", payloadDataNew);
+
+    //jsonput(transactionLine,"_price_book_var_name","_default_price_book");
+    //jsonput(transactionLine,"_is_line_item_mandatory",true);
+    jsonput(documents, "transactionLine", transactionLine);
+
+    jsonput(finalPayload, "cacheInstanceId", "-1");
+    jsonput(finalPayload, "documents", documents);
+    //jsonput(finalPayload ,"selections",selections );
+    jsonput(finalPayload, "revisionId", "2,0");
+    //print "finalPayload finalPayload finalPayload ";
+
+    criteria = "{ \"fields\":[\"transactionID_t\"], \"childDefs\": [ { \"name\":\"transactionLine\", \"recursive\":false, \"queryDef\": { \"fields\":[\"_document_number\"] } } ] }";
+    jsonput(finalPayload, "criteria", json(criteria));
+    //print finalPayload ;
+    //endPointURL = "https://"+system+".bigmachines.com/rest/v18/commerceDocumentsOraclecpqoTransaction/"+string(bsId)+"/actions/addLineItem_t";
+    endPointURL = "https://" + system + ".bigmachines.com/rest/v18/commerceDocumentsOraclecpqoTransaction/" + string(bsId) + "/actions/_update_line_items";
+    if (jsonarraysize(payloadDataNew) > 0) {
+        response = urldata(endPointURL, "POST", headers, jsontostr(finalPayload), 90000);
+        //print "Udpate Line Items:::";
+        //print endPointURL ;
+        //print response;
+
+        if (get(response, "Status-Code") == "200") {
+            messageBody = json(get(response, "Message-Body"));
+            //responseJSON = json(messageBody);
+            //docNumber = jsonget(responseJSON,"_document_number");
+            //jsonarrayappend(selections,"transactionLine/"+docNumber);
+        } else {
+            msg = get(response, "Error-Message");
+            if (find(msg, "o:errorDetails") <> -1) {
+                msgJSON = json(msg);
+                msgArr = jsonpathgetmultiple(msgJSON, "$..title");
+                mIndexes = range(jsonarraysize(msgArr));
+                for ind in mIndexes {
+                    append(errorMsg, jsonarrayget(msgArr, ind));
+                }
+            } else {
+                append(errorMsg, msg);
+            }
+        }
+    }
+
+} else {
+    //modelNames = jsonkeys(payloadData);
+    payloadData = jsonget(inputJSON, "payloadData", "json");
+    modelNames = string[];
+    keys = jsonkeys(payloadData);
+    for key in keys {
+        keyArr = split(key, "#");
+        append(modelNames, keyArr[0]);
+    }
+
+    modelRootVarDict = dict("string"); // 10-28-2026 CHG010953
+    modelRootVars = string[]; // 10-28-2026 CHG010953
+    //recordSet = bmql("select distinct ProductFamily,ProductLine,Model from GuidedSellingDetails where Model in $modelNames");
+    recordSet = bmql("select PartNumber, RootVariableName from Oracle_BomItemDef2 where VariableName in $modelNames"); // 10-28-2026 CHG010953
+    for rec in recordSet {
+        modelPath = get(rec, "PartNumber");
+        modelPathArr = split(modelPath, ":");
+        productFamily = modelPathArr[0];
+        productLine = modelPathArr[1];
+        model = modelPathArr[2];
+        put(modelDetailsDict, model + "PF", productFamily);
+        put(modelDetailsDict, model + "PL", productLine);
+        // 10-28-2026 CHG010953 --Start
+        rootVar = get(rec, "RootVariableName");
+        put(modelRootVarDict, model, rootVar);
+        if (findinarray(modelRootVars, rootVar) == -1) {
+            append(modelRootVars, rootVar);
+        }
+        // 10-28-2026 CHG010953 --End
+    }
+    // 10-28-2026 CHG010953 --Start
+    bomPartDict = dict("string");
+    if (sizeofarray(modelRootVars) > 0) {
+        bomRecordSet = bmql("select RootVariableName, PartNumber from Oracle_BomItemDef2 where RootVariableName in $modelRootVars");
+        for bomRec in bomRecordSet {
+            put(bomPartDict, get(bomRec, "RootVariableName") + "|" + get(bomRec, "PartNumber"), "Y");
+        }
+    }
+    missingComponentsDict = dict("string[]");
+    // 10-28-2026 CHG010953 --End
+    itemsJSONArray = jsonarray();
+    //for modelName in modelNames {
+    for key in keys {
+        keyArr = split(key, "#");
+        modelName = keyArr[0];
+        // 10-28-2026 CHG010953 --Start
+        serialNumber = "";
+        if (sizeofarray(keyArr) > 1) {
+            serialNumber = keyArr[1];
+        }
+        // 10-28-2026 CHG010953 --End
+        modelPayload = json();
+        productFamily = get(modelDetailsDict, modelName + "PF");
+        productLine = get(modelDetailsDict, modelName + "PL");
+        if (isnull(productFamily) or isnull(productLine)) {
+            //errorMsg = errorMsg +"\n" +modelName +": product line details are not found.";
+            append(errorMsg, modelName + ": product line details are not found.");
+            continue;
+        }
+        //preownedData = jsonget(payloadData,modelName,"string");
+        preownedData = jsonget(payloadData, key, "string");
+        // 10-28-2026 CHG010953 --Start
+        modelRootVar = get(modelRootVarDict, modelName);
+        preownedDataJSON = json(preownedData);
+        componentsArr = jsonget(preownedDataJSON, key, "jsonarray", jsonarray());
+        missing_items = string[];
+        cIndexes = range(jsonarraysize(componentsArr));
+        for ci in cIndexes {
+            compObj = jsonarrayget(componentsArr, ci, "json");
+            edpCode = jsonget(compObj, "EDPCode", "string", "");
+            if (edpCode <> "" and NOT containskey(bomPartDict, modelRootVar + "|" + edpCode)) {
+                append(missing_items, edpCode);
+            }
+        }
+        if (sizeofarray(missing_items) > 0) {
+            put(missingComponentsDict, key, missing_items);
+            continue;
+        }
+        // 10-28-2026 CHG010953 --End
+        configData = json();
+        pleaseChooseTheTypeOfTheProduct = json();
+        jsonput(pleaseChooseTheTypeOfTheProduct, "value", "REGULARMODEL");
+
+
+        jsonput(modelPayload, "productFamily", productFamily);
+        jsonput(modelPayload, "productLine", productLine);
+        jsonput(modelPayload, "model", modelName);
+
+        jsonput(configData, "pleaseChooseTheTypeOfTheProduct", pleaseChooseTheTypeOfTheProduct);
+        jsonput(configData, "selectedPreowned", preownedData);
+        jsonput(modelPayload, "configData", configData);
+
+        jsonarrayappend(itemsJSONArray, modelPayload);
+    }
+    // 10-28-2026 CHG010953 -- Start
+    missingKeys = keys(missingComponentsDict);
+    for missingKey in missingKeys {
+        missingKeyArr = split(missingKey, "#");
+        missingModel = missingKeyArr[0];
+        missingSerial = "";
+        if (sizeofarray(missingKeyArr) > 1) {
+            missingSerial = missingKeyArr[1];
+        }
+        missingArr = get(missingComponentsDict, missingKey);
+        append(errorMsg, missingSerial + " : " + missingModel + ": " + join(missingArr, ", ") + " EDP Codes are Missing in BOM. <br>");
+    }
+    // 10-28-2026 CHG010953 --End
+    jsonput(finalPayload, "bsId", bsId);
+    jsonput(finalPayload, "documentId", 36244074);
+    jsonput(finalPayload, "items", itemsJSONArray);
+
+    if (jsonarraysize(itemsJSONArray) > 0) {
+
+        endPointURL = "https://" + system + ".bigmachines.com/rest/v18/config/actions/_bulkAddToTxn";
+        response = urldata(endPointURL, "POST", headers, jsontostr(finalPayload), 90000);
+
+        if (get(response, "Status-Code") == "200") {
+            messageBody = json(get(response, "Message-Body"));
+
+        } else {
+            msg = get(response, "Error-Message");
+            if (find(msg, "o:errorDetails") <> -1) {
+                msgJSON = json(msg);
+                msgArr = jsonpathgetmultiple(msgJSON, "$..title");
+                mIndexes = range(jsonarraysize(msgArr));
+                for ind in mIndexes {
+                    append(errorMsg, jsonarrayget(msgArr, ind));
+                }
+            } else {
+                append(errorMsg, msg);
+            }
+        }
+    }
+}
+if (sizeofarray(errorMsg) > 0) {
+    retVal = json();
+    jsonput(retVal, "title", join(errorMsg, "\n"));
+    return jsontostr(retVal);
+}
+return "Success";
+//return join(errorMsg ,"\n")  ;

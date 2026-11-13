@@ -1,0 +1,447 @@
+/*print "===========USER-INPUTS--"+_bm_model_variable_name;
+print _BM_USER_GROUPS;
+print selectedAccount;
+print dataTablesList;
+print orderType;
+print configurationType_Family;
+print pleaseChooseTheTypeOfTheProduct;
+print "-----------";*/
+startTime = getcurrenttimeinmillis();
+desjson = json();
+engTime = getcurrenttimeinmillis();
+OrgName = "";
+if (commerceAttrs <> "") {
+	commerceAttrsJSON = json(commerceAttrs);
+	//OrgName = jsonget(commerceAttrsJSON,"rACUserOrg_c","string","");//Staging Defect#21: IM370F-RIC >> ELRE-ICKT- Inactive in CPQ parts for RCI, but visible in configurator.
+	OrgName = jsonget(commerceAttrsJSON, "OrgName", "string", ""); //Staging Defect#21: IM370F-RIC >> ELRE-ICKT- Inactive in CPQ parts for RCI, but visible in configurator.
+}
+masterData = json();
+stepNames = jsonarray();
+items = jsonarray();
+stepNamesArr = string[];
+stepNamesDict = dict("string");
+displayStepNamesDict = dict("string");
+thumbnails = json();
+tips = json();
+
+//Added to get the optional class for the choose account from selected account 12_24
+
+selectedOption = selectedAccount; // +" OPTION CLASS";
+if (selectedOption == "" and selectedAccountSeasoned <> "") {
+	selectedOption = selectedAccountSeasoned;
+}
+STEP_NAMES_TABLE = "";
+MODEL_STRUCTURE_TABLE = "";
+if (dataTablesList <> "") {
+	dataTablesListJSON = json(dataTablesList);
+	STEP_NAMES_TABLE = jsonget(dataTablesListJSON, "STEP_NAMES", "string", "");
+	MODEL_STRUCTURE_TABLE = jsonget(dataTablesListJSON, "MODEL_STRUCTURE", "string", "");
+}
+if (STEP_NAMES_TABLE == "") {
+	throwerror("Steps not found.");
+}
+if (MODEL_STRUCTURE_TABLE == "") {
+	throwerror("items not found.");
+}
+rulePathDict = dict("string");
+modelName = upper(_bm_model_variable_name);
+order_type = upper(orderType);
+rulePathArr = string[]; // 10-28-2026 CHG0105953 Gandeev
+//print order_type;
+recordSet = bmql("select * from $STEP_NAMES_TABLE where (ModelName = $_bm_model_variable_name OR ModelName = $modelName)and BaseModel = $orderType AND ProductType = $pleaseChooseTheTypeOfTheProduct and ConfigurationType = $configurationType_Family and (IsActive = 'Y' or IsActive is null) AND Order<>0 order by Order asc");
+for rec in recordSet {
+	stepNameObj = json();
+	stepName = get(rec, "StepName");
+	arraysetName = get(rec, "ArraysetName");
+	attributeName = get(rec, "AttributeName");
+	isMultiSelect = get(rec, "IsMultiSelect");
+	isBundle = get(rec, "IsBundle");
+	displayStepName = get(rec, "DisplayStepName");
+	EDPCode = get(rec, "EDPCode");
+	rulePath = get(rec, "rulePath");
+	showFlag = get(rec, "showFlag");
+	isMainDevice = get(rec, "IsMainDevice");
+	IsRequired = get(rec, "IsRequired");
+	if (isMultiSelect == "") {
+		isMultiSelect = "Y";
+	}
+	if (isBundle == "") {
+		isBundle = "N";
+	}
+	if (isMainDevice == "") {
+		isMainDevice = "N";
+	}
+	//SG Added for IMC model Choose account step name
+	chooseaccount = "N";
+	if (stepName == "CHOOSE ACCOUNT") {
+		if (selectedOption <> "") {
+			stepName = selectedOption;
+			EDPCode = selectedOption;
+			chooseaccount = "Y";
+			//rulePath=rulePath+"."+selectedOption;
+			logtime("set choose account --->" + stepName, engTime - startTime);
+		} else {
+			arraysetName = "";
+			EDPCode = "";
+			rulePath = "";
+		}
+	}
+	jsonput(stepNameObj, "stepName", stepName);
+	jsonput(stepNameObj, "arraysetName", arraysetName);
+	jsonput(stepNameObj, "chooseaccount", chooseaccount);
+	jsonput(stepNameObj, "attributeName", attributeName);
+	jsonput(stepNameObj, "Order", get(rec, "Order"));
+	jsonput(stepNameObj, "isMultiSelect", isMultiSelect);
+	jsonput(stepNameObj, "IsBundle", isBundle);
+	jsonput(stepNameObj, "rulePath", rulePath);
+	jsonput(stepNameObj, "displayStepName", displayStepName);
+	jsonput(stepNameObj, "PartNumber", EDPCode);
+	jsonput(stepNameObj, "showFlag", showFlag);
+	jsonput(stepNameObj, "isMainDevice", isMainDevice);
+	jsonput(stepNameObj, "IsRequired", IsRequired);
+
+	jsonarrayappend(stepNames, stepNameObj);
+	append(stepNamesArr, stepName);
+	if (arraysetName <> "") {
+		put(stepNamesDict, stepName, arraysetName);
+		put(stepNamesDict, stepName + "ARRAY", arraysetName);
+		put(displayStepNamesDict, stepName, displayStepName);
+	} else {
+		put(stepNamesDict, stepName, attributeName);
+		put(displayStepNamesDict, stepName, displayStepName);
+	}
+	put(rulePathDict, stepName, rulePath);
+	append(rulePathArr, rulePath); // 10-28-2026 CHG0105953 Gandeev
+}
+//------------------Structure table query
+Acc_con = "%" + selectedAccount + "%"; // Added tthis to get option for accounts which doesn't have OPTION CLASS Extension
+EDPCodes = string[];
+//recordSet = bmql("select * from $MODEL_STRUCTURE_TABLE where ModelName = $modelName and BaseModel = $order_type and (ConfigurationType = $configurationType_Family OR ConfigurationType is null) and (StepName LIKE $Acc_con OR StepName in $stepNamesArr OR StepName IS NULL) and (IsActive= 'Y' or IsActive is null) order by StepName,Sequence asc");
+recordSet = bmql("select * from $MODEL_STRUCTURE_TABLE where ModelName = $modelName and BaseModel = $order_type and (ConfigurationType = $configurationType_Family OR ConfigurationType is null) and (StepName LIKE $Acc_con OR StepName in $stepNamesArr OR StepName IS NULL) and (IsActive= 'Y' or IsActive is null) ");
+for rec in recordSet {
+	partNumber = get(rec, "EDPCode");
+	append(EDPCodes, partNumber);
+}
+configureItem = "";
+
+queryItem = EDPCodes[0];
+//print queryItem;
+if (not isnull(queryItem)) {
+	//bomRecordSet = bmql("select VariableName from Oracle_BomItemDef2 WHERE PartNumber = $querItem and RootVariableName = $_bm_model_variable_name");
+	// 10-28-2026 CHG0105953 Gandeev --Start
+	//bomRecordSet = bmql("select VariableName from Oracle_BomItemDef2 WHERE PartNumber in $EDPCodes and RootVariableName = $_bm_model_variable_name");
+
+	rulePathValue = "%" + rulePathArr[0] + "%";
+	bomRecordSet = bmql("select VariableName from Oracle_BomItemDef2 WHERE VariableName like $rulePathValue and RootVariableName = $_bm_model_variable_name");
+	// 10-28-2026 CHG0105953 Gandeev --End
+	for rec in bomRecordSet {
+		variableName = get(rec, "VariableName");
+		variableNameArr = split(variableName, ".");
+		configureItem = variableNameArr[1];
+		break;
+
+	}
+}
+//------------------Model_UI_Content ---- start 
+UI_Content_jsonarr = jsonarray();
+UI_Content_json = json();
+arrayRecords = bmql("select * from RAC_MODEL_UI_CONTENT WHERE EDPCode IN $EDPCodes");
+for each in arrayRecords {
+	EDPCode = get(each, "EDPCode");
+	Tempjs = json();
+	desarr = string[];
+
+	if (get(each, "LongDescription") <> "" AND NOT ISnull(get(each, "LongDescription"))) {
+		longDescription = replace(get(each, "LongDescription"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(desarr, longDescription);
+	}
+	if (get(each, "LongDescription1") <> "" AND NOT ISnull(get(each, "LongDescription1"))) {
+		longDescription1 = replace(get(each, "LongDescription1"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(desarr, longDescription1);
+	}
+	if (get(each, "LongDescription2") <> "" AND NOT ISnull(get(each, "LongDescription2"))) {
+		longDescription2 = replace(get(each, "LongDescription2"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(desarr, longDescription2);
+	}
+	if (get(each, "LongDescription3") <> "" AND NOT ISnull(get(each, "LongDescription3"))) {
+		longDescription3 = replace(get(each, "LongDescription3"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(desarr, longDescription3);
+	}
+	if (get(each, "LongDescription4") <> "" AND NOT ISnull(get(each, "LongDescription4"))) {
+		longDescription4 = replace(get(each, "LongDescription4"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(desarr, longDescription4);
+	}
+	if (get(each, "LongDescription5") <> "" AND NOT ISnull(get(each, "LongDescription5"))) {
+		longDescription5 = replace(get(each, "LongDescription5"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(desarr, longDescription5);
+	}
+	if (get(each, "LongDescription6") <> "" AND NOT ISnull(get(each, "LongDescription6"))) {
+		longDescription6 = replace(get(each, "LongDescription6"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(desarr, longDescription6);
+	}
+	if (get(each, "LongDescription7") <> "" AND NOT ISnull(get(each, "LongDescription7"))) {
+		longDescription7 = replace(get(each, "LongDescription7"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(desarr, longDescription7);
+	}
+	if (sizeofarray(desarr) > 0) {
+		//description=join(desarr,"\n");
+		description = join(desarr, "");
+		jsonput(Tempjs, "Desciption", description);
+	}
+	//------------Notes
+
+	notesarr = string[];
+	if (get(each, "Notes") <> "" AND NOT ISnull(get(each, "Notes"))) {
+		notes = replace(get(each, "Notes"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(notesarr, notes);
+	}
+	if (get(each, "Notes1") <> "" AND NOT ISnull(get(each, "Notes1"))) {
+		notes1 = replace(get(each, "Notes1"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(notesarr, notes1);
+	}
+	if (get(each, "Notes2") <> "" AND NOT ISnull(get(each, "Notes2"))) {
+		notes2 = replace(get(each, "Notes2"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(notesarr, notes2);
+	}
+	if (get(each, "Notes3") <> "" AND NOT ISnull(get(each, "Notes3"))) {
+		notes3 = replace(get(each, "Notes3"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(notesarr, notes3);
+	}
+	if (get(each, "Notes4") <> "" AND NOT ISnull(get(each, "Notes4"))) {
+		notes4 = replace(get(each, "Notes4"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(notesarr, notes4);
+	}
+	if (get(each, "Notes5") <> "" AND NOT ISnull(get(each, "Notes5"))) {
+		notes5 = replace(get(each, "Notes5"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(notesarr, notes5);
+	}
+	if (get(each, "Notes6") <> "" AND NOT ISnull(get(each, "Notes6"))) {
+		notes6 = replace(get(each, "Notes6"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(notesarr, notes6);
+	}
+	if (get(each, "Notes7") <> "" AND NOT ISnull(get(each, "Notes7"))) {
+		notes7 = replace(get(each, "Notes7"), "##", ","); //comma is replaced with # in salsify integration to avoid issues with csv file
+		append(notesarr, Notes7);
+	}
+	if (sizeofarray(notesarr) > 0) {
+		Notes = join(notesarr, "\n");
+		jsonput(Tempjs, "Note", Notes);
+	}
+	thumbNailsvalue = get(each, "ProductImage");
+	toolTipsvalue = replace(get(each, "ToolTips"), "##", ",");
+	toolTipsvalue2 = replace(get(each, "ToolTips_Ext"), "##", ",");
+	//comma is replaced with # in salsify integration to avoid issues with csv file
+	if (not isnull(thumbNailsvalue) or thumbNailsvalue <> "null") {
+		jsonput(Tempjs, "thumbnail", thumbNailsvalue);
+	} else {
+		jsonput(Tempjs, "thumbnail", "$BASE_PATH$/HardwareEquipment/no-image.png");
+	}
+	if (not isnull(toolTipsvalue + toolTipsvalue2) or toolTipsvalue + toolTipsvalue2 <> "null") {
+		jsonput(Tempjs, "tips", toolTipsvalue + toolTipsvalue2);
+	} else {
+		jsonput(Tempjs, "tips", "No tool tips available");
+	}
+	jsonput(Tempjs, "EDPCode", EDPCode);
+	jsonarrayappend(UI_Content_jsonarr, Tempjs);
+}
+jsonput(UI_Content_json, modelName, UI_Content_jsonarr);
+//}
+itemStatusDict = dict("string");
+orgNameDict = dict("string");
+OrgItemStatusDict = dict("string");
+//------------------Model_UI_Content ----END
+
+partsRecordSet = bmql("select part_number ,custom_field1,custom_field326,custom_field337,custom_field338 from _parts where part_number in $EDPCodes");
+for partRec in partsRecordSet {
+	put(itemStatusDict, get(partRec, "part_number"), get(partRec, "custom_field1"));
+	put(orgNameDict, get(partRec, "part_number"), get(partRec, "custom_field326"));
+	put(OrgItemStatusDict, get(partRec, "custom_field326") + "#" + get(partRec, "part_number") + "#RUS", get(partRec, "custom_field337"));
+	put(OrgItemStatusDict, get(partRec, "custom_field326") + "#" + get(partRec, "part_number") + "#RCI", get(partRec, "custom_field338"));
+
+}
+logtime("model structure query --->", engTime - startTime);
+inactiveItems = json();
+nonOrgItems = json();
+index = 0;
+chooseaccount_stepname = "";
+chooseaccount_path = "";
+
+for rec in recordSet {
+
+	itemObj = json();
+	stepName = get(rec, "StepName");
+	attributeName = get(rec, "AttributeName");
+	partNumber = get(rec, "EDPCode");
+	if (stepName == "ADDITIONAL PAPER SOURCES & CABINETS FOR PROC5400S") {
+		print "<---------------------------------------------------------------------->";
+		print partNumber;
+		print "<---------------------------------------------------------------------->";
+	}
+	// SY 30SEP it will be enabled once all issues related to items is resolved
+	// commented by Gandeev 10-07-2026 -RITM 1765179  --- Start
+	//if(find(partNumber,"ADDITIONAL") == -1 and find(partNumber,"UNIT") == -1 and (not containskey(itemStatusDict,partNumber) OR (containskey(itemStatusDict,partNumber) and get(itemStatusDict,partNumber) <> "Active"))){
+	//if(containskey(itemStatusDict,partNumber) and get(itemStatusDict,partNumber) <> "Active"){//Additional Units will not be available in Parts DB Ex: 408300 [1ST ADDITIONAL UNIT]. it will be like 408300. So it should be allowed to display.
+	//if(_config_operation_context == "reconfigure"){
+	//jsonput(inactiveItems,partNumber,get(itemStatusDict,partNumber));
+	//}
+
+	//continue;
+	//} // commented by Gandeev 10-07-2026 -RITM 1765179  --- END
+	if (containskey(orgNameDict, partNumber)) {
+		itemOrgName = get(orgNameDict, partNumber);
+		checkOrg = (OrgName == "" OR itemOrgName == "" OR itemOrgName == "ALL" OR
+			itemOrgName == "NONE" OR itemOrgName == OrgName);
+		//logtime(partNumber +"----"+ get(itemStatusDict,partNumber)+"==OrgName="+OrgName+"===itemOrgName="+itemOrgName,200) ;
+		if (checkOrg and itemOrgName <> "" and selectedPreowned == "") { // 10-28-2026 CHG0105953 Gandeev
+			checkKey = itemOrgName + "#" + partNumber + "#RUS";
+			if (containskey(OrgItemStatusDict, checkKey) and OrgName == "RUS") {
+				orgItemStatus = get(OrgItemStatusDict, checkKey);
+				if (NOT isnull(orgItemStatus) and orgItemStatus <> "null" and UPPER(orgItemStatus) <> "ACTIVE") {
+					continue;
+				}
+			}
+			checkKey = itemOrgName + "#" + partNumber + "#RCI";
+			if (containskey(OrgItemStatusDict, checkKey) and OrgName == "RCI") {
+				orgItemStatus = get(OrgItemStatusDict, checkKey);
+				if (NOT isnull(orgItemStatus) and orgItemStatus <> "null" and UPPER(orgItemStatus) <> "ACTIVE") {
+					continue;
+				}
+			}
+
+		}
+		if (NOT checkOrg and selectedPreowned == "") { //10-28-2026 CHG0105953 Gandeev 
+
+			jsonput(nonOrgItems, partNumber, itemOrgName);
+			continue;
+			//empty = "";
+		}
+
+	}
+	partDescription = get(rec, "PartDescription");
+	toolTips = "No tool tips available";
+	thumbNail = "";
+	descPath = "$." + modelName + ".[?(@.EDPCode == '" + replace(partNumber, "'", "\\'") + "')]"; //to escape speacial char(');	
+	if (jsonpathcheck(UI_Content_json, descPath)) {
+		tempjsr = jsonpathgetmultiple(UI_Content_json, descPath);
+		tempjs = json(jsonarrayget(tempjsr, 0));
+		if (jsonget(tempjs, "Desciption", "string", "") <> "") {
+			partDescription = partDescription + "\n" + jsonget(tempjs, "Desciption", "string", "");
+		}
+		if (jsonget(tempjs, "Note", "string", "") <> "") {
+			notesValue = jsonget(tempjs, "Note", "string", "");
+			notesValue = replace(notesValue, "<p>", "");
+			notesValue = replace(notesValue, "<li>", "");
+			notesValue = replace(notesValue, "</p>", "");
+			notesValue = replace(notesValue, "</li>", "");
+			partDescription = partDescription + "\n \n Note: \n" + notesValue;
+		}
+		toolTips = jsonget(tempjs, "tips");
+		thumbNail = jsonget(tempjs, "thumbnail");
+	}
+
+	rulePath = get(rec, "RulePath");
+	WidthRatio = get(rec, "WidthRatio");
+	HeightRatio = get(rec, "HeightRatio");
+	DepthRatio = get(rec, "DepthRatio");
+	if (not isnull(WidthRatio) and WidthRatio <> "") {
+		partDescription = partDescription + "\n" + WidthRatio;
+	}
+	if (not isnull(HeightRatio) and HeightRatio <> "") {
+		partDescription = partDescription + "\n" + HeightRatio;
+	}
+	if (not isnull(DepthRatio) and DepthRatio <> "") {
+		partDescription = partDescription + "\n" + DepthRatio;
+	}
+	if (containskey(stepNamesDict, stepName)) {
+		attributeName = get(stepNamesDict, stepName);
+	}
+	if (find(stepName, selectedOption) <> -1) {
+		attributeName = get(stepNamesDict, selectedOption);
+		rulePath = get(rulePathDict, selectedOption) + "." + stepName;
+		chooseaccount_path = "$..stepNames[?(@.arraysetName == '" + attributeName + "')].stepName";
+		chooseaccount_stepname = stepName;
+	}
+
+	if (attributeName == "" or isnull(attributeName)) {
+		continue;
+	}
+	//logtime("AttributeName --->"+attributeName,engTime-startTime);
+	jsonput(itemObj, "partNumber", partNumber);
+	jsonput(itemObj, "partDescription", partDescription);
+	jsonput(itemObj, "toolTips", toolTips);
+	jsonput(itemObj, "thumbNail", thumbNail);
+	jsonput(itemObj, "stepName", stepName);
+	jsonput(itemObj, "displayStepName", get(displayStepNamesDict, stepName));
+
+	if (containskey(rulePathDict, stepName) and (isnull(rulePath) or rulePath == "")) {
+		rulePath = get(rulePathDict, stepName);
+	}
+
+	jsonput(itemObj, "rulePath", rulePath);
+	jsonput(itemObj, "attributeName", attributeName);
+	if (containskey(stepNamesDict, stepName + "ARRAY")) {
+		jsonput(itemObj, "IsArraySet", true);
+
+	} else {
+		jsonput(itemObj, "IsArraySet", false);
+	}
+
+	items = jsonget(masterData, attributeName, "jsonarray", jsonarray());
+	if (jsonarraysize(items) == 0) {
+		index = 0;
+	} else {
+		index = jsonpathgetsingle(masterData, "$." + attributeName + ".[-1:].index", "integer", 0);
+		index = index + 1;
+	}
+	jsonput(itemObj, "index", index);
+
+	jsonarrayappend(items, itemObj);
+	jsonput(masterData, attributeName, items);
+
+}
+configurationTypeJSON = json();
+jsonput(configurationTypeJSON, "partNumber", configureItem);
+jsonput(masterData, "configurationType_Family", configurationTypeJSON);
+
+jsonput(masterData, "stepNames", stepNames);
+//jsonput(masterData,"ToolTips",tips);
+//jsonput(masterData,"ThumbNails",thumbnails);
+
+jsonput(masterData, "OrgName", OrgName);
+jsonput(masterData, "inactiveItems", inactiveItems);
+jsonput(masterData, "NonOrgItems", nonOrgItems);
+jsonput(masterData, "Notes", notesTextArea);
+if (chooseaccount_stepname <> "" AND jsonpathcheck(masterData, chooseaccount_path)) {
+	jsonpathset(masterData, chooseaccount_path, chooseaccount_stepname);
+}
+/*
+bomParts = string[];
+resultArr = string[];
+results = string[];
+//modelsVar = string[]{"IM350FSE","IM430FSE","IM8000RM","IM550FLHC","IM550F","IM600SRFG","IM600SRF","IM2500RM","IM3500RM","IM4000RM","IM430FRF","IM350FRF"};
+
+for everyPart in recordSet{
+	bomPart = get(everyPart,"EDPCode");
+	if(findinarray(bomParts,bomPart) == -1){
+		append(bomParts,bomPart);
+	}
+ 
+}
+
+inactiveParts = bmql("select part_number, custom_field1 from _parts where part_number in $bomParts");// and custom_field1 = 'Inactive'");
+for eachPart in inactiveParts{
+	masterPart = get(eachPart,"part_number"); 
+	if(findinarray(resultArr,masterPart) == -1){
+		append(resultArr,masterPart);
+	}
+}
+for every in bomParts{
+	if(findinarray(resultArr,every) == -1){
+		append(results, every);
+	}
+}
+
+jsonput(masterData,"missingParts",join(results,","));
+*/
+//logtime("master data string --->",engTime-startTime);
+return jsontostr(masterData);

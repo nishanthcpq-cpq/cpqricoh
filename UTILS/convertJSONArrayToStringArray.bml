@@ -1,0 +1,6 @@
+returnArr = string[];
+indexes = range(jsonarraysize(inputJSONArray));
+for i in indexes{
+        returnArr[i] = jsonarrayget(inputJSONArray,i,"string");
+}
+return returnArr;

@@ -1,0 +1,67 @@
+// inputJSON = json();
+// jsonput(inputJSON,"debug",true);
+// return commerce.commerceValuesReturn_c(inputJSON);
+
+
+
+debug = jsonget(lineDetailsJSON, "debug", "boolean", false);
+quoteJSON = lineDetailsJSON;
+if (debug) {
+    params = json();
+    quoteJSON = commerce.getQuoteData_c(jsontostr(params));
+}
+
+quote = jsonget(quoteJSON, "header", "json");
+lines = jsonget(quoteJSON, "lineDetails", "jsonarray", jsonarray());
+resultString = stringbuilder();
+resultString = stringbuilder();
+//we will also ignore all _part_custom_fields, so we don't have to list these here
+protectedAttrArray = string[] {
+    "_document_number",
+    "_config_attr_info",
+    "_part_number",
+    "_parent_doc_number",
+    "_parent_line_item",
+    "_model_name",
+    "_model_variable_name",
+    "_part_desc",
+    "_line_bom_id",
+    "_price_list_price_each",
+    "bs_id",
+    "transactionID_t",
+    "_line_bom_parent_id",
+    "_system_buyside_id",
+    "_system_current_step_var",
+    "_system_company_name",
+     "_price_calculation_info",
+    "_price_quantity",
+    "_price_unit_price_each",
+    "_part_service_duration",
+    "_group_sequence_number",
+    "_sequence_number"
+};
+
+quoteAttrArray = jsonkeys(quote);
+for attr in quoteAttrArray {
+    if (findinarray(protectedAttrArray, trim(attr)) == -1 AND find(attr, "_") <> -1) {
+        value = jsonget(quote, attr, "string", "");
+        sbappend(resultString, "1~", attr, "~", value, "|");
+    }
+}
+// Walk Through Line Items
+indices = range(jsonarraysize(lines));
+for i in indices {
+    line = jsonarrayget(lines, i, "json");
+    docNum = jsonget(line, "_document_number");
+    lineAttrArray = jsonkeys(line);
+    for attr in lineAttrArray { // Continue for data coming from config or part custom fields    
+        if (startswith(attr, "_system") OR startswith(attr, "computed_") OR startswith(attr, "config_") OR startswith(attr, "_part_custom_field") OR startswith(attr, "_line_bom")) {
+            continue;
+        }
+        if (findinarray(protectedAttrArray, trim(attr)) == -1 AND find(attr, "_") <> -1) {
+            value = jsonget(line, attr, "string", "");
+            sbappend(resultString, docNum, "~", attr, "~", value, "|");
+        }
+    }
+}
+return sbtostring(resultString);

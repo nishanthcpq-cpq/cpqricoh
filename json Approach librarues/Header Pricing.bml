@@ -1,0 +1,36 @@
+// Handles header level pricing, should only return values for document 1
+lineDetailsJSON = inputJSON;
+
+// setup variables
+headerJSON = jsonget(lineDetailsJSON, "header", "json", json());
+linesArray = jsonget(lineDetailsJSON, "lineDetails", "jsonarray", jsonarray());
+
+systemStep = jsonget(headerJSON, "_system_current_step_var", "string", "");
+
+modelNameJArray = jsonpathgetmultiple(lineDetailsJSON, "$..lineDetails[?(@._model_variable_name != '')]._model_variable_name");
+
+
+partJArray = jsonpathgetmultiple(lineDetailsJSON, "$..lineDetails[?(@._part_number != '')]._part_number");
+
+
+
+totalNet = 0.0;
+totalNetPath = "$..lineDetails[?(@.totalPrice_c != 0.0 && @.rollupFlag_l == false)].totalPrice_c";
+if (jsonpathcheck(lineDetailsJSON, totalNetPath)) {
+    totalNet = jsonpathgetsingle(lineDetailsJSON, totalNetPath + ".sum()", "float", 0.0);
+}
+//jsonput(headerJSON, "totalNetPrice_c", round(totalNet, 2));
+
+// monthlyRecurringRevenue_c
+mrr = 0.0;
+if (jsonpathcheck(lineDetailsJSON, "$..lineDetails[?(@.monthlyRecurRevSummable_l != '' && @.rollupFlag_l == false)].monthlyRecurRevSummable_l")) {
+    mrr = jsonpathgetsingle(lineDetailsJSON, "$..lineDetails[?(@.monthlyRecurRevSummable_l != '' && @.rollupFlag_l == false)].monthlyRecurRevSummable_l.sum()", "float", 0.0);
+}
+//jsonput(headerJSON, "monthlyRecurringRevenue_c", round(mrr, 2));
+
+
+jsonput(lineDetailsJSON, "header", headerJSON);
+
+//lineDetailsJSON = commerce.calculate_QuoteSummary_c(lineDetailsJSON);
+
+return lineDetailsJSON;

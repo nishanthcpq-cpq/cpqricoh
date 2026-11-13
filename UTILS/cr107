@@ -1,0 +1,1626 @@
+/*
+    @modified on            :23-May-2024 by a Mohan For Pricing Engine API Call
+    @resulturn   -    	    :	String
+    Updated                 :06/07/2025 - Line of code updated by Abhishek for CHG009724
+    PERF_8_3                : Timing instrumentation added (logtime only). No functional code changed.
+                              All added variables are prefixed perf* so they cannot collide with the
+                              existing starttime/startTime/endtime timers (BML identifiers are case-insensitive).
+*/
+t_pricing_perf = getCurrentTimeInMillis();
+print "Suresh108: Beforeformulas start";
+if(pricingToggle_t_c == "New Pricing" ){
+	//params = json();
+	returnVal  = "" ;
+	
+	//returnVal =  commerce.runPricing_c("") ;	
+	//logtime("PERF_8_3 TOTAL Save-Calculate Before Formulas new pricing", getcurrenttimeinmillis() - t);
+   	
+   	if(_system_user_login == "nishanth.turpati@ricoh-usa.com" AND logKeyword_c <> "" ){
+   	logtime( logKeyword_c + "t_pricing_perf_8_3 TOTAL  Save-Calculate Before Formulas new pricing", getcurrenttimeinmillis() - t_pricing_perf);
+}
+   	return returnVal ;
+}
+RECORDLOGTIME_FLAG = false;
+containsMPSLines = false;
+
+result = "";
+authString = "";
+itemStr = "";
+leaseflags = json();
+t = getCurrentTimeInMillis();
+validateModel = true;
+MPSFlag = false;
+RWAIPFlag=false;
+ITSFlag = false;
+IBPFlag = false;
+XAASFlag = false;
+inputDict = dict("string");
+resultDict1 = dict("string");
+partCustomFieldDict = dict("string");
+//BUItemsDict = dict("string"); //Commented for Defect #31443
+partNumberArray = string[];
+processGroupArray = string[];
+parentDocNumArray = string[];
+modelDocNumArray = string[];
+businessLineArr = string[];
+docNumArray = string[];
+itemTypeArray = string[];
+derivedFrom = "Before Formulas";
+put(inputDict,"derivedFrom",derivedFrom);
+modelsContainsInQuote = modelsContainsInQuote_t;
+modelsContainsInQuoteStr = "";
+lcl_parentdocnum = "";
+lclshippingaddress = "";
+lcllocationSiteID = "";
+lcllocationName = "";
+lclproject = "";
+XaaSFlag  =false;
+resulturnBooleanDict = dict("boolean");
+resulturnStringDict = dict("string");
+resulturnFloatDict = dict("float");
+resulturnIntegerDict = dict("integer");
+CommonLineInputStr = "";
+CommonHeaderInputStr = "";
+pricequantity = "1";
+quickReference = "";
+siteReference = "";
+PIODocNumDict = dict("string");
+BUSellingPriceDict = dict("string");
+docNumArrayForPIO = string[];
+//start - CHG0103323
+includeMSflag=false;//03-07-26
+containsMSitem=false;//03-07-26
+docNumbersMSitem=string[];
+managedservice=false;
+//End - CHG0103323
+tilde = "~";
+delim = "|";
+//Added by Brij kishore to restrict pricing libraries after pricing approval defect#31124
+pricingApprovedCondition = false;
+
+if(_system_current_step_var  == "start_step" OR _system_current_step_var  == "pending_process_bmClone_3" OR _system_current_step_var  == "pending_process_bmClone_1" OR _system_current_step_var  == "vendorQuotingProcess" OR _system_current_step_var  == "pending_process_bmClone_2" OR _system_current_step_var == "pending_process" OR _system_current_step_var == "pendingFnFApproval" OR _system_current_step_var == "approvedFnF"){
+	pricingApprovedCondition = true;
+}
+//PH 2.0: Req #35 :  Call reconfigure API to update BOM. It will throw error if item is deleted from BOM. And will update the BOM LIG if item is newly added
+// Commented for temporary by Halemboor Ramesh - This library causing quote order submit.
+//recResult = commerce.reconfigureAPIPOC_c();
+
+//Phase 2.0 : Resource Details : #Req7 
+RusRsiVal= ((rACUserOrg_c == "RUS")OR (rACUserOrg_c == "RCI"));
+
+
+
+//Durga RGC 8-28-2024
+//Added by Durga Mohan For RGC - CHG0092267 - RQ27 START
+RGCPortfolioCategoryArray = string[];
+if(pIOFlag_c == false){ //02/24/2025 CHG0094000 Added by Vasundhara, Added condition so the below code not run for PIO.
+	IsRGCAdded = false;
+	perfT = getcurrenttimeinmillis();
+	QueryData = bmql("select LOOKUP_CODE from RAC_SC_Lookup where LOOKUP_TYPE ='ENT_SERV_CATEGORY_PORTFOLIO_CATEGORY' AND ENABLE_FLAG='Y'");
+	for each in QueryData{
+		LookupCode = get(each,"LOOKUP_CODE");
+		if(findinarray(RGCPortfolioCategoryArray,LookupCode)==-1){
+			append(RGCPortfolioCategoryArray,LookupCode);
+		}
+	}
+	logtime("PERF_8_3 BMQL RAC_SC_Lookup (RGC portfolio)", getcurrenttimeinmillis() - perfT);
+}
+//CR100 - Sheema
+PricelistRateflag = false;
+PriceList_Rate = bmql("select MEANING from RAC_Lookup where LOOKUP_TYPE = 'PRICELIST_RATE' AND ORG = $rACUserOrg_c AND MEANING = $combinedPriceListMenu_c");
+for each in PriceList_Rate
+{
+	if(combinedPriceListMenu_c == get(each,"MEANING"))
+	{
+		PricelistRateflag = true;
+	}
+}
+setattributevalue("1","pricelistRateFlag_c",PricelistRateflag);
+//CR100 - Sheema - End
+//Added by Durga Mohan For RGC - CHG0092267 - RQ27 END
+//START_Added by Vasundhara for MPS CHG0085215 - Below Code moved from After formulas to Before formulas
+/*if(containsMPSLines_t_c){
+siteName = lower(_system_supplier_company_name);
+resultSet = bmql("select Username,Password,InstancesName from INT_SYSTEM_DETAILS where InstancesName = $siteName");
+endpoint = "";
+authString = "";
+//loop through the records
+for record in resultSet{
+authString = "Basic " + encodebase64(get(record,"Username") + ":" + get(record,"Password"));
+endpoint = get(record,"InstancesName");
+}
+put(headerDict, "Content-Type", "application/json");
+put(headerDict, "Authorization", authString );
+EndPoint_URL="https://"+_system_company_name+".bigmachines.com/rest/v12/commerceDocumentsOraclecpqoTransaction/"+bs_id+"/actions/_update_line_items";
+restActionRespMPS= urldatabypost(EndPoint_URL, "", "ERROR",headerDict, true);
+//put(inputDict,"updateLineItemsJson",restActionRespMPS);
+}*/
+//MPS_Performance_Testing
+//END_Added by Vasundhara for MPS CHG0085215
+
+//Changes done to handle XaaS Priicng portal-Supriya
+/*if(find(_system_user_groups, "rICOHXaaSQuoters") <> -1){
+
+//Changes done for IPS pricing
+result =result + commerce.setupLibraryForXaaS_c();
+//result = result + commerce.uTILFORXAAS();
+result = result + commerce.xaaSCommonLinkageLibrary();
+}else{*/
+//START_Performance_Code_Changes_by_Vasundhara //CHG0078656 : CPQ MS- CPQ Changes deployment//
+
+//Start- Added by Durga Mohan as Part of Credit Worthiness CHG0094000 - date(11-21-2024)
+//creditQuoteAmmount = 0.0;
+ShippingAddress = "";
+stateDetails= "";
+locationName = "";
+project = "";
+TotalImagesPerMonth = 0;
+HWaaSModelExist = false;
+tsLinesFlag = false;
+fullAddress ="";
+locationSiteID  = "";
+isHardwareConfigured = false;
+//Added by Sathyanarayana on 20-Jan-2026 as a part of CPQ Performance Tuning project
+vendorList = string[]; 
+qtyArray = string[];
+linkedArray = string[];
+qtySAArray = string[];
+extendedSupportTermArray = string[];
+discountTypeArray = string[];
+discountAmountArray = string[];
+promotionCodeArray = string[];
+promotionCOmmentsArray = string[];
+unitSellingPriceArray = string[];
+tempArray = string[];
+primaryLeadFlag = false;
+count = 0;
+vPartarray = selectedDRTeamMemberArraySet_t;
+arraysize = range(jsonarraysize(vPartarray));
+addressArraySize = range(jsonarraysize(customerAccountResult_t));
+//END
+starttime = getcurrenttimeinmillis();
+addressArraySize = range(jsonarraysize(customerAccountResult_t));
+for row in addressArraySize {
+	selection = jsonget(json(jsonarrayget(customerAccountResult_t, row)),"shipToPrimaryFlag_Result_t_c","string","");
+	if(selection == "true"){
+	// query statemet modified by Namrarta for INC3215686  --if fields are null return blank
+	fullAddress = jsonget(json(jsonarrayget(customerAccountResult_t, row)),"completeAddress_Result_t_c", "string", "");
+	locationSiteID = jsonget(json(jsonarrayget(customerAccountResult_t, row)),"locationSiteID_Result_t", "string", "");
+	stateDetails= jsonget(json(jsonarrayget(customerAccountResult_t, row)),"state_Result_t", "string", "");
+	}
+
+}
+endtime = getcurrenttimeinmillis();
+logtime("Sag - save calculate COMMON- Custmoer account result", endtime-starttime);
+
+Print "Running Save / Calculate Before Formulas";
+
+//added by Namrata as part of 2.0 performance changes. Pricing Table data storing the Header Json.
+//code moved to Line default by Namrata to resolve double update issue in 2.0
+
+/*TableQueryDict = dict("string");
+PricingTableQueryJson = commerce.queryDatatableForPricing_c(TableQueryDict);
+setAttributeValue(1,"pricingTableQueryJson_c",jsontostr(PricingTableQueryJson)) ;
+*/
+
+//PERF_8_3 START: accumulators for the per-line hotspots inside the transactionLine loop below.
+//These measure the TOTAL time spent across ALL lines for each repeated operation, plus how many times it ran.
+perfItemTypeMs = 0; perfItemTypeCnt = 0;
+perfGroupCheckMs = 0; perfGroupCheckCnt = 0;
+perfConfigAttrMs = 0; perfConfigAttrCnt = 0;
+perfLoopStart = getcurrenttimeinmillis();
+//PERF_8_3 END
+selectionjsonarray= jsonarray();
+startTime = getcurrenttimeinmillis();
+genDict = dict("string");
+fnf_requiredflag = false ; //AND  eachLine .directEntryitem_c  == false 
+for eachLine in transactionLine{
+	//if (eachLine .modelName_l_c	<>  "Hardware"  AND  eachLine .directEntryitem_c  == false  AND fnf_requiredflag == false ){
+	if (eachLine .modelName_l_c	<>  "Hardware"  AND  eachLine ._parent_doc_number <> "" AND fnf_requiredflag == false ){
+	
+		fnf_requiredflag = true ;
+		} // condition added by NTurpati for CR107
+
+
+	/*//Naveen K - Preparing the selection array to remove them from the LIG
+	if(eachLine.lineStatus_l_c == "Marked for Deletion"){
+		selectionvalue = "transactionLine/"+eachLine._document_number;
+		jsonarrayappend(selectionjsonarray,selectionvalue); 
+	}*/
+	//start - CHG0103323
+if(eachLine._part_number=="CONTRACTALERT-MSBILLING"){
+containsMSitem=true;
+}
+if(eachLine.includeInMS_l){
+includeMSflag=true;
+}
+if(eachLine._parent_doc_number=="managedServices_Root"){
+managedservice=true;
+append(docNumbersMSitem,eachLine._document_number);
+}
+//End- CHG0103323
+	/*BEGIN CR32 Sthota 09Aug2026*/
+   /* groupSeqArr = split(eachLine._group_sequence_number,".");
+	groupSeq = groupSeqArr[0];
+	if(eachLine._parent_doc_number == ""){
+		priceBook = getconfigattrvalue(eachLine._document_number,"priceBook");
+		if(isnull(priceBook)){
+			priceBook = "";//combinedPriceListMenu_c;
+		}
+		put(genDict,groupSeq,priceBook);
+		result = result + eachLine._document_number+ "~priceBook_l_c~" + priceBook + "|";
+	}*/
+/*else{
+		priceBook = get(genDict,groupSeq);
+		result = result + eachLine._document_number+ "~priceBook_l_c~" + priceBook + "|";
+	}*/
+    /*END Sthota 09Aug2026*/
+	if((pIOFlag_c OR rACUserOrg_c == "RUS" OR rACUserOrg_c == "RCI") AND eachLine.shippingAddress_c == "" AND (eachLine._model_name <> "TS Services" AND eachLine._model_name <> "TS Lines")){
+		result = result + eachLine._document_number+ "~shippingAddress_c~" + fullAddress + "|";
+		result = result + eachLine._document_number+ "~locationSiteID_l~" + locationSiteID + "|";
+		result = result + eachLine._document_number+ "~state_l_c~" + stateDetails + "|";
+	}if((pIOFlag_c OR rACUserOrg_c == "RUS" OR rACUserOrg_c == "RCI") AND eachLine.locationSiteID_l== "" AND (eachLine._model_name <> "TS Services" AND eachLine._model_name <> "TS Lines")){
+			/*for row in addressArraySize {
+			fullAddress = jsonget(json(jsonarrayget(customerAccountResult_t, row)),"completeAddress_Result_t_c");
+			if(fullAddress == eachLine.shippingAddress_c){
+			locationSiteID = jsonget(json(jsonarrayget(customerAccountResult_t, row)),"locationSiteID_Result_t");
+			result = result + eachLine._document_number+ "~locationSiteID_l~" + locationSiteID + "|";
+
+			}*/
+			
+		result = result + eachLine._document_number+ "~locationSiteID_l~" + locationSiteID + "|";
+		result = result + eachLine._document_number+ "~state_l_c~" + stateDetails + "|";
+
+	}
+if(RusRsiVal)
+{
+result = result + eachLine._document_number+ "~includeInMS_l~" + string(TSinMS_t_c) + "|";
+}
+//Start -- Moved code from attributes to before formulas on 20-Jan-2026 by sathyanarayana 
+    processGroup = "";
+    itemType = eachLine.type_l;
+    //PERF_8_3: per-line BMQL #1 - runs once for EVERY transaction line
+    perfT = getcurrenttimeinmillis();
+    itemTypeRecordSet = bmql("SELECT ItemType, ProcessGroup FROM RAC_ITEM_TYPE WHERE ItemType = $itemType");
+    for eachItemType in itemTypeRecordSet {
+        processGroup = get(eachItemType, "ProcessGroup");
+    }
+    perfItemTypeMs = perfItemTypeMs + (getcurrenttimeinmillis() - perfT);
+    perfItemTypeCnt = perfItemTypeCnt + 1;
+    if (processGroup == "SC" OR processGroup == "MS" OR quoteProduct_t == "Managed Services") {
+        if (sizeofarray(arraysize) == 0) {
+            primaryLeadFlag = true;
+        } else {
+            for arr in arraysize {
+                primarydesign = jsonget(json(jsonarrayget(vPartarray, arr)), "primaryDesignLead_DRTeamMemberAarray_t");
+                if (primarydesign <> "true" and count == 0) {
+                    primaryLeadFlag = true;
+                } else {
+                    count = count + 1;
+                    primaryLeadFlag = false;
+                }
+            }
+        }
+    }
+    if (eachLine.ricohVendorQuoteRequestNumber_l <> "") {
+        append(vendorList, eachLine._document_number + "!" + eachLine.ricohVendorQuoteRequestNumber_l);
+    }
+    append(qtyArray, eachLine._document_number + "!" + string(eachLine._price_quantity));
+    append(linkedArray, eachLine._document_number + "!" + eachLine.linkedItem_l);
+    append(qtySAArray, eachLine._document_number + "!" + string(eachLine.quantitySA_l));
+    append(extendedSupportTermArray, eachLine._document_number + "!" + string(eachLine.extendedSupportTerm_l));
+    append(discountTypeArray, eachLine._document_number + "!" + eachLine.discounttype_l);
+    append(discountAmountArray, eachLine._document_number + "!" + string(eachLine.discountAmountt_l));
+    append(promotionCodeArray, eachLine._document_number + "!" + eachLine.promoCode_l);
+    append(promotionCOmmentsArray, eachLine._document_number + "!" + eachLine.promotionComments_l);
+    append(unitSellingPriceArray, eachLine._document_number + "!" + string(eachLine.unitSellingPrice_l));
+
+    if (eachLine.ricohVendorQuoteRequestNumber_l <> "") {
+        append(tempArray, eachLine.ricohVendorQuoteRequestNumber_l);
+    } elif (eachLine.ricohVendorQuoteRequestNumber_l == "") {
+        append(tempArray, "standardItems");
+    }
+    //END
+	/*Added by CP for TS Lines*/
+	if(eachLine._model_name == "TS Lines" OR eachLine._model_name == "TS Services"){
+	tsLinesFlag = true;
+	}
+	/*end here*/
+	
+	if(eachLine._model_name <> "" AND HWaaSModelExist == false){
+		HWaaSModelExist = true;
+	}
+	//Added the condition to check if part already exists or not by sheema - Performance Proj
+	    if (eachLine._part_number <> "" AND (findinarray(partNumberArray,eachLine._part_number)==-1)) {
+	        append(partNumberArray, eachLine._part_number);
+	    }
+	if(eachLine._parent_doc_number == "" AND eachLine._model_name == "" AND findinarray(itemTypeArray,eachLine.type_l) == -1 AND eachLine._part_number <> ""){
+		append(itemTypeArray,eachLine.type_l);
+	}elif(eachLine._parent_doc_number == "" AND eachLine._model_name <> ""){
+		append(processGroupArray,eachLine._model_name);
+	}
+	//START_DESC added by Namrata defect 33042 in 2.0
+	if(eachLine.businessLine_c <> ""){
+	append(businessLineArr , eachLine.businessLine_c); 
+	print "businessLineArr "; print businessLineArr ;
+	}
+	//END_DESC added by Namrata defect 33042 in 2.0
+
+	//Validation Model Changes - START
+	if(eachLine._parent_doc_number <> ""){
+		append(parentDocNumArray,eachLine._parent_doc_number);	
+	}
+	if(findinarray(docNumArray,eachLine._document_number) == -1 AND eachLine._parent_doc_number == ""){
+		if(eachLine._model_name <> ""){
+			append(modelDocNumArray,eachLine._document_number);
+		}else{
+			append(docNumArray,eachLine._document_number);
+		}
+	}
+	//Validation Model Changes - END
+
+	//Just store discounted values into this attribute to compare on validation   discountAmountt_l  unitSellingPrice_l  contractedUnitPrice_l
+	result = result+eachLine._document_number+"~discountedValuesPriceAmountValues_c~"+string(eachLine.discountAmountt_l)+"@"+string(eachLine.unitSellingPrice_l)+
+	"@"+string(eachLine.contractedUnitPrice_l)+"|";
+
+	/*if(eachLine._model_name == "Managed Print Services"){	
+		MPSFlag = true;
+	}*/
+	
+//Added by Brij kishore to restrict pricing libraries after pricing approval defect#31124
+if(pricingApprovedCondition){
+	if(eachLine._model_variable_name == "thirdPartyProducts"){
+		partCostAdjusted = eachLine.vendorUnitCost_l * exchangeRate_t;
+		partCost = string(partCostAdjusted);
+		result = result + eachLine._document_number+ "~listPriceNRR_l~" + string(eachLine._price_list_price_each)+ "|";
+		result = result + eachLine._document_number+ "~unitCost_l~" + partCost+ "|";
+	}
+}
+	
+	//START - Added by Durga Mohan as part of  RGC - CHG0092267 - RQ27- date(29-08-2024)
+	if(findinarray(RGCPortfolioCategoryArray,eachLine._part_custom_field282) > -1 AND find(modelsContainsInQuote_t,"RGC") == -1){
+		result = result + "1~modelsContainsInQuote_t~" + (modelsContainsInQuote_t + "RGC") + "|";
+		Name = "RGC";
+		Email = "";
+		Role = "RGC";
+		Title = "RGC";
+		EmailQueryData = bmql("select EmailId from RAC_Email_ID where Category='RGC F&F Approver'");
+		for each in EmailQueryData{
+			Email = get(each,"EmailId");
+		}
+		membersJson = json();
+		searchArray = jsonarray();
+		jsonput(membersJson,"searchedName_DRTeamMemberAarray_t",Name);
+		jsonput(membersJson,"searchedEmail_DRTeamMemberAarray_t",Email);
+		jsonput(membersJson,"searchTitle_DRTeamMemberAarray_t",Title);
+		jsonput(membersJson,"searchRole_DRTeamMemberAarray_t",Role);
+		jsonarrayappend(searchArray,membersJson);
+		result = result + "1~searchDRTeamMemberArraySet_t~"+ jsonarraytostr(searchArray) + "|";
+	}
+	//END - Added by Durga Mohan as part of  RGC - CHG0092267 - RQ27- date(29-08-2024)
+	//START - 03/12/2024 CHG0094000 - Added by Ninad Lad - For Mass Update Functionality  - RQ11.      
+	/*if(pIOFlag_c){
+		if(eachLine._model_name == "HWaaS" AND eachLine._part_number == ""){
+			if(jsonarraysize(customerAccountResult_t)>0){
+				addressRange = range(jsonarraysize(customerAccountResult_t));
+				for address in addressRange{    
+					addressJSON = jsonarrayget(customerAccountResult_t, address, "json");
+					shippingAddress = jsonget(addressJSON, "completeAddress_Result_t_c","string","");
+					if(eachLine.shippingAddress_c == shippingAddress){
+						locationSiteID = jsonget(addressJSON, "locationSiteID_Result_t","string","");
+						locationSiteNumber = jsonget(addressJSON, "locationSiteNumber_Result_t","string","");
+						locationName = jsonget(addressJSON, "locationName_Result_t","string","");
+						project = jsonget(addressJSON, "project_Result_t","string","");
+						
+						put(PIODocNumDict,eachLine._document_number + "-shippingAddress_c",ShippingAddress);
+						put(PIODocNumDict,eachLine._document_number + "-locationSiteID_l",locationSiteID);
+						put(PIODocNumDict,eachLine._document_number + "-locationNumber_l",locationSiteNumber);
+						put(PIODocNumDict,eachLine._document_number + "-projectNumber_l",project);
+						put(PIODocNumDict,eachLine._document_number + "-quickReference_c",eachLine.quickReference_c);
+						put(PIODocNumDict,eachLine._document_number + "-siteReference_c",eachLine.siteReference_c);
+						put(PIODocNumDict,eachLine._document_number + "-earliestDeliveryDate_c",eachLine.earliestDeliveryDate_c);
+						
+						result = result + eachLine._document_number + tilde + "locationSiteID_l" + tilde + locationSiteID + delim;
+						result = result + eachLine._document_number + tilde + "locationNumber_l" + tilde + locationSiteNumber+ delim;
+						result = result + eachLine._document_number + tilde + "locationNames_l" + tilde + locationName + delim;
+						result = result + eachLine._document_number + tilde + "projectNumber_l" + tilde + project + delim;
+						result = result + eachLine._document_number + tilde + "address_contact_c" + tilde + ShippingAddress + delim;
+					}
+				}
+			}
+		}else{
+			put(PIODocNumDict,eachLine._document_number + "ParentDocNumber",eachLine._parent_doc_number);
+			append(docNumArrayForPIO, eachLine._document_number);
+		}
+	}*/
+	
+	//START 02/24/2025 CHG0094000 by Vasundhara Moved the below code from another transactionLine loop to here.
+	//PERF_8_3: per-line config attribute read - runs once for EVERY transaction line
+	perfT = getcurrenttimeinmillis();
+	TotalImageData = getconfigattrvalue(eachLine._document_number, "totalImagesPerMonth");
+	perfConfigAttrMs = perfConfigAttrMs + (getcurrenttimeinmillis() - perfT);
+	perfConfigAttrCnt = perfConfigAttrCnt + 1;
+	if(NOT(isnull(TotalImageData))){
+		TotalImagesPerMonth = atoi(TotalImageData);
+	}
+	if(eachLine._part_number  <> ""){
+		if(CommonLineInputStr <> ""){
+			CommonLineInputStr = CommonLineInputStr + ",";
+		}
+		groupCheck = eachLine._part_custom_field23;
+		processGroup = "";
+		//PERF_8_3: per-line BMQL #2 - second RAC_ITEM_TYPE query, runs once for EVERY line that has a part number
+		perfT = getcurrenttimeinmillis();
+		ProcessGroupRecords = BMQL("Select ProcessGroup , ItemType from RAC_ITEM_TYPE where ItemType = $groupCheck");
+		for re in processGroupRecords {
+			processGroup = get(re,"ProcessGroup");	
+			if(startswith(eachLine._part_number,"MS-")){
+				result = result + eachLine._document_number+ "~itemType_c~" + "MS" + "|";	
+			}else{			
+			result = result + eachLine._document_number+ "~itemType_c~" + processGroup + "|";
+			}	
+		}
+		perfGroupCheckMs = perfGroupCheckMs + (getcurrenttimeinmillis() - perfT);
+		perfGroupCheckCnt = perfGroupCheckCnt + 1;
+		//Start - Durga Mohan 22-May-2024 To eliminate API call redundancy 
+		// Below Code is Added to generate Common Line Item Strings to eliminate API call redundancy 
+		// Below mentioned strings are initialised to pass line level attributes based on the commonality between the inputs
+		ITSCondition = (eachLine.bundleNameRWA =="" AND  processGroup == "ITS" AND eachLine._part_number <> "" OR (processGroup == "SC" AND acquisitionType_t == "Lease"));
+		MPSCondition = (eachLine._part_number <> "" AND ((eachLine._part_custom_field23 == "MANAGED PRINT SVC-RECURRING CHARGE") OR (eachLine.bundleNameRWA <> "")));
+		XAASCondition = (eachLine._part_number <> "" AND ((startswith(eachLine.bundleName_l,"RPAP")==true) OR startswith(eachLine.bundleName_l,"PRINTINONE")==true));
+		//RWACondition = ((eachLine._part_number <> "") AND (eachLine.bundleNameRWA<>""));
+		IBPCondition = (eachLine.configCommentsNew_l == "Insight Central") OR (eachLine.configCommentsNew_l == "Simple Send") OR (eachLine.configCommentsNew_l == "Print and Mail");
+		//HW condition added by Namrata for HW pricing CHG #CHG0097680
+		HWCondition = (eachLine._part_number <> "" AND eachLine.businessLine_c == "TRADITIONAL");
+	
+	//Added by Brij kishore to restrict pricing libraries after pricing approval defect#31124		
+	if(pricingApprovedCondition){
+		ITS_LineInputString = "";
+		XAAS_LineInputString = "";
+		MPS_LineInputString = "";
+		RWA_ITS_XAAS_LineInputString = "";
+		XAAS_RWA_MPS_LineInputString = "";
+		ITS_MPS_IBP_LineInputString = "";
+		XAAS_RWA_LineInputString = "";
+		MPS_RWA_LineInputString = "";
+		IBP_LineInputString = "";
+		HW_LineInputString = "";
+		if(ITSCondition OR XAASCondition){
+			RWA_ITS_XAAS_LineInputString =  "\",\"unitCost_c\":\"" +string(eachLine.unitSalesCost_l)
+				+ "\",\"iTSUnitSalesCost_c\":\"" +string(eachLine.unitCost_l)
+				+ "\",\"parentDocNumber_c\":\"" +eachLine._parent_doc_number;
+		}
+		if(ITSCondition OR MPSCondition OR IBPCondition){
+			ITS_MPS_IBP_LineInputString =  "\",\"discountAmount_c\":\"" + string(eachLine.discountAmountt_l)
+					+ "\",\"discountType_c\":\"" + eachLine.discounttype_l;
+		}
+		if(XAASCondition OR MPSCondition){
+			XAAS_RWA_MPS_LineInputString =  "\",\"lineItemBOMAttributes_c\":\""+ replace(eachLine._line_bom_attributes,"\"","\\\"");
+		}
+		if(XAASCondition){
+			XAAS_RWA_LineInputString =  "\",\"XaaSBundleName_c\":\"" + eachLine.bundleName_l;
+		}
+		print MPSCondition;
+		print "MPSCondition";
+		if(MPSCondition){
+			MPS_RWA_LineInputString =  "\",\"bUNDLENAME_c\":\"" + eachLine.bundleNameRWA;
+		}
+		if((eachLine.businessLine_c == "PS" AND (find(eachLine._part_number , "EQ-RETURN") == -1))OR eachLine.businessLine_c == "ITS" OR HWCondition ){
+			if(ITSFlag == false){
+				ITSFlag = true;
+			}
+			ITS_LineInputString =  "\",\"priceUpliftCategory_c\":\"" + eachLine._part_custom_field25
+			//START Below lines added by Durga Mohan as part of CHG0091213 Equipment Prices incident INC2795009  27-06-2024
+						+ "\",\"equipmentComment_c\":\""+ eachLine.equipmentComments_c
+						+ "\",\"configurablePrice_c\":\""+ string(eachLine._price_configurable_price)
+			//END Below lines added by Durga Mohan as part of CHG0091213 Equipment Prices incident INC2795009  27-06-2024
+						+ "\",\"ricohVendorQuoteNumber_c\":\"" + eachLine.vendorQuoteNumber_VLIG
+						+ "\",\"variableItem_c\":\"" + eachLine._part_custom_field27
+						+ "\",\"chargeType_c\":\"" + eachLine.chargeType_l
+						+ "\",\"includeInMSAddress_c\":\"" + string(eachLine.includeInMS_l)
+						+ "\",\"vendorCost_c\":\"" + string(eachLine.vendorUnitCost_l)
+						+ "\",\"unitSRP_c\":\"" + string(eachLine.unitSRP_l)
+						+ "\",\"unitSRPBackend_c\":\"" + string(eachLine.unitSRPBackend_l)
+						+ "\",\"promoCodes_c\":\"" + eachLine.promoCode_l
+						+ "\",\"defaultListPrice_c\":\"" +string(eachLine._price_list_price_each)
+						+ "\",\"uniSalesCost_c\":\"" +string(eachLine.unitSalesCost_l)
+						+ "\",\"frozenCost_c\":\"" +string(eachLine._part_custom_field6)
+						+ "\",\"partListPrice_c\":\"" +string(eachLine._part_custom_field7)
+						+ "\",\"vendorName_c\":\"" +eachLine.vendorName_l
+						+ "\",\"modelName_c\":\"" +eachLine._model_name
+						+ "\",\"equipmentPrice_c\":\"" +eachLine.overridePricing_c
+						//Below line of code updated by removing the spacing of the attributes(customSequenceForProposal_c) by Abhishek for CHG0097245
+						+ "\",\"customSequenceForProposal_c\":\"" + string(eachLine.customSequenceForProposal_l)
+						+ "\",\"customSequenceSuffix_c\":\"" + string(eachLine.customSequenceSuffix_l)
+						+ "\",\"sequenceNumber_c\":\"" + string(eachLine._sequence_number);
+		}
+		if(XAASCondition){
+			if(XAASFlag == false)
+			{
+				XAASFlag = true;
+			}
+			XAAS_LineInputString  =  "\",\"groupSequenceNumber_c\":\"" +eachLine._group_sequence_number;
+			
+		}
+		if(MPSCondition){
+		print "Chakri";
+			if(containsMPSLines == false){
+				containsMPSLines = true;
+			}
+			MPS_LineInputString   =  "\",\"_quantity\":\"" + pricequantity
+			+ "\",\"thirdPartyDiscount_c\":\"" + string(eachLine.thirdPartyDiscount_MPS_c);
+		}	
+		
+		if(IBPCondition){
+			if(IBPFlag == false){
+				IBPFlag = true;
+			}
+			IBP_LineInputString   =  "\",\"configComments_c\":\"" + eachLine.configCommentsNew_l
+			+ "\",\"lineBomAttributes_c\":\"" +replace(eachLine._line_bom_attributes,"\"","\\\"");
+		}
+		
+		// added for - CHG0092204 | RWA Enhancements 
+		//Akhil | 27 Aug 2024	
+		quantity_LineInputString = "";	
+		if(eachLine.rWAFlatPricing_c){
+			quantity_LineInputString =  string(eachLine.substituteQuantity_c);
+		}else{
+			quantity_LineInputString = string(eachLine._price_quantity);
+		}
+		//Added by Sheema - Performance Tuning
+	        BU_item = eachLine.modelBaseUnitCode_c;
+	        SELLINGPRICEFLOAT = 0.0;
+	       
+	       //START_DESC code commented for CR-66 as part of 2.0
+		/*if(BU_Item  == eachLine._part_number)
+		{
+				partNumberArray = string[];
+				defaultListPriceStr = eachLine._price_list_price_each;
+				partNumber = eachLine._part_number;
+				listPrice = eachLine._part_custom_field7;
+				frozenCost = eachLine._part_custom_field6;
+				priceUpliftCategory = eachLine._part_custom_field25;
+				//print priceUpliftCategory ;
+				docNum = eachLine._document_number;	
+				priceUpliftCategory = "";		
+				BOM_Item_Type = "";
+				cashPrice = 0.0;
+				sMA = 0.0;
+				fplaFlag = "";
+				minGPPercentage = 0.0;
+				productFloor = 0.0;
+				sgaSegement = 0.0;
+				hardwareTargetPrice = 0.0;
+				priceUpliftCategoryStr = "";
+				plCashJson = json();
+				upliftJson = json();
+				retBooleanDict = dict("boolean");
+				retStringDict = dict("string");
+				retFloatDict = dict("float");
+				retIntegerDict = dict("integer");
+				priceUpliftCategoryArray = string[];
+				upliftJson = json();
+				plAttributesJson = json();
+				partsDataJson = json();
+				Priceliststr = "";
+				marketPlace = marketplace_t;
+				fyCustomerStartType = fYStartCustomerType_t;
+				fyCustomerStartTypeException = fYStartCustomerTypeException_t;
+				fYStartProductionZBA = fYStartProductionZBA_t;
+				fyCustomerStartTypeVal = "N";
+				segmentLevel = segmentLevel_t;
+				if(fyCustomerStartTypeException == "true"){
+					fyCustomerStartTypeVal = "Y";
+				}
+				elif(fyCustomerStartTypeException == "false" AND fyCustomerStartType == "ZBA"){
+					fyCustomerStartTypeVal = "Y";
+				}
+				if(fyCustomerStartTypeException == "true"){
+					fyCustomerStartTypeException = "Y";
+				}
+				fYStartProductionZBA = "N";
+				if(fYStartProductionZBA_t == "true"){
+					fYStartProductionZBA = "Y";
+				}
+				if(segmentLevel_t == "None"){
+				segmentLevel= "";
+				}
+				
+				if(lower(eachLine.modelName_l_c) == "hardware" OR (rACUserOrg_c == "RUS" OR rACUserOrg_c == "RCI")){
+					Priceliststr = combinedPriceListMenu_c;
+				}
+				put(retStringDict,"fYStartProductionZBA",fYStartProductionZBA);
+				put(retStringDict,"fyCustomerStartType",fyCustomerStartTypeVal );
+				put(retStringDict,"priceList",Priceliststr);
+				put(retStringDict,"customerSegment",segment_t);
+				put(retStringDict,"segmentLevel",segmentLevel);
+				
+				processGroup = "";
+				itemType = eachLine._part_custom_field23;
+				itemTypeArray = string[];
+				append(itemTypeArray, itemType);
+				processGroupDict = util.getProcessGroup(itemTypeArray);
+				if(containskey(processGroupDict, itemType)){
+					processGroup = get(processGroupDict, itemType);
+				}
+				listPrice = eachLine._part_custom_field7;
+				frozenCost =eachLine._part_custom_field6;
+				priceUpliftCategory = eachLine._part_custom_field25;
+				BOM_Item_Type = eachLine._part_custom_field286;
+				productCategory4Str = lower(priceUpliftCategory);
+				productCategory4Str = replace(productCategory4Str,".","_");
+				productCategory4Str = replace(productCategory4Str," ","_");
+				if(findinarray(priceUpliftCategoryArray,productCategory4Str) == -1 AND NOT isnull(productCategory4Str) AND productCategory4Str <> ""){
+					put(retStringDict,productCategory4Str,productCategory4Str);
+				}	
+				rebatePercentagePath = "rebatePercentage";
+				if(jsonpathcheck(plAttributesJson,rebatePercentagePath)){ 
+					if(isnumber(jsonpathgetsingle(plAttributesJson,rebatePercentagePath,"string"))){
+						rebatePercentage = jsonpathgetsingle(plAttributesJson,rebatePercentagePath,"float");
+					}
+				}	
+				productFloorPath = "$.TablePayload.UpliftInfo['" + partNumber + "'].productFloor";
+				sgaSegementPath = "$.TablePayload.UpliftInfo['" + partNumber + "'].sgaSegement";
+				hardwareTargetPricePath = "$.TablePayload.UpliftInfo['" + partNumber + "'].hardwareTargetPrice";
+				minGPPercentagePath = "$.TablePayload.UpliftInfo['" + partNumber + "'].minGPPercentage";
+				cashPricePath = "$.TablePayload.CashInfo['" + partNumber + "'].priceListPrice";
+				sMApath = "$.TablePayload.CashInfo['" + partNumber + "'].sMA";
+				fplaFlagpath = "$.TablePayload.CashInfo['" + partNumber + "'].FPLA_Flag";
+				
+				//attribute set in line default
+				PricingTableQueryJson = json(pricingTableQueryJson_c);
+				
+				if(jsonpathcheck(PricingTableQueryJson,cashPricePath) AND isnumber(jsonpathgetsingle(PricingTableQueryJson,cashPricePath,"string"))){
+					cashPrice = jsonpathgetsingle(PricingTableQueryJson,cashPricePath,"float");
+				}
+				if(jsonpathcheck(PricingTableQueryJson,sMApath) AND isnumber(jsonpathgetsingle(PricingTableQueryJson,sMApath,"string"))){
+					sMA = jsonpathgetsingle(PricingTableQueryJson,sMApath,"float");
+				}
+				if(jsonpathcheck(PricingTableQueryJson,fplaFlagpath)){
+					fplaFlag = jsonpathgetsingle(PricingTableQueryJson,fplaFlagpath,"string");
+				}
+				if(jsonpathcheck(PricingTableQueryJson,minGPPercentagePath) AND isnumber(jsonpathgetsingle(PricingTableQueryJson,minGPPercentagePath,"string"))){
+					minGPPercentage = jsonpathgetsingle(PricingTableQueryJson,minGPPercentagePath,"float");
+				}
+				if(jsonpathcheck(PricingTableQueryJson,productFloorPath) AND isnumber(jsonpathgetsingle(PricingTableQueryJson,productFloorPath,"string"))){
+					productFloor = jsonpathgetsingle(PricingTableQueryJson,productFloorPath,"float");
+				}
+				if(jsonpathcheck(PricingTableQueryJson,sgaSegementPath) AND isnumber(jsonpathgetsingle(PricingTableQueryJson,sgaSegementPath,"string"))){
+					sgaSegement = jsonpathgetsingle(PricingTableQueryJson,sgaSegementPath,"float");
+				}
+				if(jsonpathcheck(PricingTableQueryJson,hardwareTargetPricePath) AND isnumber(jsonpathgetsingle(PricingTableQueryJson,hardwareTargetPricePath,"string"))){
+					hardwareTargetPrice = jsonpathgetsingle(PricingTableQueryJson,hardwareTargetPricePath,"float");
+				}
+				put(retFloatDict,"cashPrice",cashPrice);
+				put(retFloatDict,"sMA",sMA);
+				put(retFloatDict,"minGPPercentage",minGPPercentage);
+				put(retFloatDict,"productFloor",productFloor);
+				put(retFloatDict,"sgaSegement",sgaSegement);
+				put(retFloatDict,"hardwareTargetPrice",hardwareTargetPrice);
+				put(retStringDict,"fplaFlag",fplaFlag);
+				//END 08_16_2023 PERFORMANCE_ACTIVITIES added by Vasundhara
+				put(retStringDict, "docNum", docNum);
+				put(retFloatDict, "defaultListPriceStr", defaultListPriceStr);
+				//put(retStringDict, "ItemType", itemType);
+				put(retStringDict, "PartNumber", partNumber);
+				//put(retFloatDict, "VendorCost", vendorCost);
+				put(retFloatDict, "ListPrice", listPrice);
+				put(retFloatDict, "FrozenCost", frozenCost);
+				if (NOT isnull(priceUpliftCategory)) {
+					put(retStringDict, "PriceUpliftCategory", priceUpliftCategory);
+				}
+				put(retStringDict, "marketPlace", marketPlace);
+				put(retStringDict, "fyCustomerStartType", fyCustomerStartType);
+				put(retStringDict, "fyCustomerStartTypeException", fyCustomerStartTypeException);
+				put(retStringDict, "fYStartProductionZBA", fYStartProductionZBA);
+				put(retStringDict, "processGroup", processGroup);
+				//put(retFloatDict, "ITSUnitSalesCost", eachLine.unitCost_l);
+				//put(retStringDict, "EquipmentComment", eachLine._line_item_comment);
+				//put(retFloatDict, "unitSellingPrice", unitSellingPrice);          
+				put(retStringDict, "derivedFrom", "Before Formulas");
+				put(retStringDict, "FetchBUSellingPrice", "FetchBUSellingPrice");
+				//put(retBooleanDict, "vpFlag", vpFlag);
+				//put(retStringDict, "VenodrQuoteNum", eachLine.vendorQuoteNumber_VLIG);
+				//put(retStringDict, "VenodrName", eachLine.vendorName_l);
+				put(retStringDict,"VariableItem",eachLine._part_custom_field27); //Added by Iswarya for VP code pricing CHG0080949
+				put(retIntegerDict, "_price_quantity", eachLine._price_quantity);
+				if((acquisitionType_t == "Lease")) {
+					value = util.getPricingForITSAndSC(retStringDict, retIntegerDict, retFloatDict, retBooleanDict);
+					put(BUSellingPriceDict , BU_Item  ,value );
+				}
+
+			}
+		//End of Performance Tuning - Sheema
+		
+			//Start of Performance Tuning - Sheema
+			//if(containskey(BUItemsDict,eachLine._document_number))  //Commented for Defect #31443
+			//{	
+				BU_Item = eachLine.modelBaseUnitCode_c; //Added by Sheema for Defect #31443
+				if(containskey(BUSellingPriceDict ,BU_Item)){
+					sellingPrice = get(BUSellingPriceDict ,BU_Item);
+					if(sellingPrice <> "" AND not(isnull(sellingPrice))){
+					sellingPriceFloat = atof(sellingPrice);
+					}
+				}
+				result = result + eachLine._document_number + "~bUSellingPrice_c~" + string(sellingPriceFloat) + "|";	
+			//}
+			//End of Performance Tuning - Sheema
+			*/
+			//END_DESC code commented for CR-66 as part of 2.0
+			if(HWCondition){
+			isHardwareConfigured = true;
+			 HW_LineInputString = "\",\"_quantity\":\"" + pricequantity
+			 
+			 + "\",\"hWModel_c\":\"" + eachLine.modelName_l_c  
+			  + "\",\"modelBaseUnitCode_c\":\"" + eachLine.modelBaseUnitCode_c
+			  + "\",\"state_l_c\":\"" + eachLine.state_l_c
+			  +"\",\"bUSellingPrice_c\":\"" +string(sellingPriceFloat) //Performance Tuning - Sheema
+			  + "\",\"sellableItem_c\":\"" + string(eachLine.sellableItem_l_c);
+			  
+			}
+		
+		CommonLineInputStr = CommonLineInputStr + "{\"partNumber\":\"" + eachLine._part_number 
+						+ "\",\"itemIdentifier\":\"" + eachLine._group_sequence_number
+						+ "\",\"itemAttributeValues\":{"
+						+ "\"documentNumber_c\":\"" + eachLine._document_number
+						+ "\",\"type_c\":\"" + eachLine._part_custom_field23
+						+ "\",\"itemNumber_c\":\"" + eachLine._part_number 
+						+ "\",\"processGroup_c\":\"" + eachLine.businessLine_c
+						+ "\",\"priceQuantity_c\":\"" + quantity_LineInputString			
+						+ RWA_ITS_XAAS_LineInputString 
+						+ ITS_MPS_IBP_LineInputString 
+						+ XAAS_RWA_MPS_LineInputString 
+						+ XAAS_RWA_LineInputString 
+						+ MPS_RWA_LineInputString 
+						+ ITS_LineInputString 
+						+ XAAS_LineInputString  
+						+ MPS_LineInputString
+						+ IBP_LineInputString
+						+ HW_LineInputString 
+						+ "\"}}";
+		}
+	}
+	
+}
+endtime = getcurrenttimeinmillis();
+logtime("SAVE_CALCULATE_8_3_2026_Before_formulas_683", endtime-starttime);
+/*//Naveen K - Adding the new UTIL here to remove all the lines which are marked for deletion in the LIG
+if(jsonarraysize(selectionjsonarray) >0){
+	inputJson = json();
+	jsonput(inputJson,"selections",selectionjsonarray);
+	jsonput(inputJson,"bs_id",bs_id);
+	removeTransactionsJson = util.removeTransactionLineAPI(inputJson);
+}*/
+//PERF_8_3 START: breakdown of what the transactionLine loop above actually spent its time on.
+//"x<N>" in each label = how many times that operation ran (should be ~= number of lines).
+logtime("PERF_8_3 LOOP TOTAL transactionLine", getcurrenttimeinmillis() - perfLoopStart);
+logtime("PERF_8_3 IN-LOOP BMQL RAC_ITEM_TYPE (itemType) x" + string(perfItemTypeCnt), perfItemTypeMs);
+logtime("PERF_8_3 IN-LOOP BMQL RAC_ITEM_TYPE (groupCheck) x" + string(perfGroupCheckCnt), perfGroupCheckMs);
+logtime("PERF_8_3 IN-LOOP getconfigattrvalue totalImagesPerMonth x" + string(perfConfigAttrCnt), perfConfigAttrMs);
+//PERF_8_3 END
+
+
+	//END - Durga Mohan 22-May-2024 To eliminate API call redundancy 
+	//END 02/24/2025 CHG0094000 by Vasundhara Moved the below code from another transactionLine loop to here.
+
+// Below Code is Added to generate Common Header Strings to eliminate API call redundancy 
+
+//Added by Brij kishore to restrict pricing libraries after pricing approval defect#31124
+if(pricingApprovedCondition){
+	ITS_HeaderInputString = "";
+	MPS_HeaderInputString = "";
+	IBP_HeaderInputString = "";
+	HW_HeaderInputString = "";
+
+	if(ITSFlag OR IBPFlag OR isHardwareConfigured ){
+		ITS_HeaderInputString = "\",\"marketPlace_c\":\"" + marketplace_t
+				+ "\",\"fYCustomerStartType_c\":\"" + fYStartCustomerType_t
+				+ "\",\"fYCustomerStartTypeException_c\":\"" + fYStartCustomerTypeException_t
+				+ "\",\"fYStartProductionZBA_c\":\"" + fYStartProductionZBA_t
+				+ "\",\"combinedPriceListMenu_c\":\"" + combinedPriceListMenu_c
+				+ "\",\"customerSegment_c\":\"" + segment_t
+				+ "\",\"segmentLevel_c\":\"" + segmentLevel_t
+				+ "\",\"addToTransactionItemSearchFlag_c\":\"" + string(addToTransactionItemSearchFlag_t)
+				+ "\",\"termMonthInNumber_c\":\"" + termMonths_t
+				+ "\",\"combinedPriceListMenu_c\":\"" + combinedPriceListMenu_c
+				+ "\",\"runPricingPortal_t_c\":\"" + string(runPricingPortal_t_c);
+
+	}
+	if(IBPFlag){
+		partsdatajson = json();
+		if(partsDataText_t <> "{}"){
+			partsdatajson = json(partsDataText_t);
+		}
+		partsdatajsontext = jsontostr(partsdatajson);
+		IBP_HeaderInputString = "\",\"partsDataText_c\":\"" + replace(partsdatajsontext,"\"","\\\"")
+		+ "\",\"iBPPrintAndMailSummation_c\":\"" +string(iBPPrintAndMailExtSRPSummation_c)
+		+ "\",\"totalImagesPerMonth_c\":\"" +string(TotalImagesPerMonth);
+	}
+
+	if(containsMPSLines){
+		MPS_HeaderInputString =  "\",\"excludePricingPortal_c\":\"false"
+			+ "\",\"bWCommittedCPI_c\":\"" + string(bWCommittedCPI_t)
+			+ "\",\"bWCommittedCPIMICR_c\":\"" + string(bWCommittedCPI_MICR_c)
+			+ "\",\"colorCommittedCPI_c\":\"" + string(colorCommittedCPI_t)
+			+ "\",\"colorCommittedCPIMICR_c\":\"" + string(colorCommittedCPI_MICR_c)
+			+ "\",\"contractTerm_c\":\"" + termMonths_t
+			+ "\",\"fleetManagementPerDevice_c\":\"" + string(fleetManagementPerDevice_t_c)
+			+ "\",\"leadingPricingStrategy_c\":\"" + leadingPricingStrategy_t
+			+ "\",\"mSTransactionType_c\":\"" + mSTransactionType_t
+			+ "\",\"mICRModifyPricingScenario_c\":\"" + modifyPricingScenario_MICR_c
+			+ "\",\"modifyPricingScenario_c\":\"" + modifyPricingScenario_t
+			+ "\",\"modifyPricingScenarioFleetManagement3rdPartyMICR_c\":\"" + modifyPricingScenarioFleetManagement3rdPartyMICR_c 
+			+ "\",\"modifyPricingScenarioFleetManagementZebra_c\":\"" + modifyPricingScenarioFleetManagementZebra_t_c
+			+ "\",\"monthlyFleetManagementZebra_c\":\"" + string(monthlyFleetManagement_Zebra_c)
+			+ "\",\"totalBaseMICR_c\":\"" + string(totalBase_MICR_c)
+			+ "\",\"totalBase_c\":\"" + string(totalBase_t)
+			+ "\",\"totalBaseOriginal_c\":\"" + totalBaseOriginalNew_c
+			+ "\",\"totalBaseOriginalMICR_c\":\"" + totalBaseOriginalMICRNew_c
+			+ "\",\"totalBaseNew_c\":\"" + totalBasePPIExtract_t_c
+			+ "\",\"totalBaseMICRNew_c\":\"" + totalBaseMICRExtract_t_C
+			+ "\",\"calculatedBWVolume_c\":\"" + bWVolume_t_c
+			+ "\",\"calculatedColorVolume_c\":\"" + colorVolume_t_c
+			+ "\",\"calculatedBWVolumeMICR_c\":\"" + bWVolumeMICR_t_c
+			+ "\",\"calculatedColorVolumeMICR_c\":\"" + colorVolumeMICR_t_c;
+	}
+
+	//added by Namrata for HW pricing CHG#CHG0097680
+
+	if(isHardwareConfigured ){
+	HW_HeaderInputString =  "\",\"leaseTerm_t_c\":\"" + leaseTerm_t
+			+ "\",\"leaseTypeList_c\":\"" + leaseTypeList_c
+			+ "\",\"leaseBillingFrequency_c\":\"" + leaseBillingFrequency_c
+			+ "\",\"propertyTaxIncluded_c\":\"" + string(propertyTaxIncluded_c)
+			+ "\",\"leasePaymentDeferral_c\":\"" + leasePaymentDeferral_c
+			+ "\",\"waiveLateFee_c\":\"" + string(waiveLateFee_c)
+			+ "\",\"state_c\":\"" + state_t
+			+ "\",\"acquisitionType_c\":\"" + acquisitionType_t
+			+ "\",\"combinedPriceListMenu_c\":\"" + combinedPriceListMenu_c
+			+ "\",\"rACUserOrg_c\":\"" + rACUserOrg_c 
+			+ "\",\"otherTerm_c\":\"" + string(otherTerm_t) ;
+		
+	}
+
+	CommonHeaderInputStr = "{\"headerAttributeValues\":{"
+			+ "\"otherContractTerm_c\":\"" + string(contractOtherTerm_t) // common header level attribute for XAAS/RWA
+			+ ITS_HeaderInputString 
+			+ MPS_HeaderInputString
+			+ IBP_HeaderInputString
+			+ HW_HeaderInputString
+			//+ "\",\"tableQueryJson_c\":\"" + jsontostr(PricingTableQueryJson)
+			+ "\"},\"currencyCode\": \"USD\",\"items\": [" + CommonLineInputStr + "]}";
+	// End - API call redundancy 
+
+	if(RECORDLOGTIME_FLAG){
+		t1=getCurrentTimeInMillis();
+		currentDateTime = getstrdate();
+		u = t1-t;
+		logtime("Save/CalculateCheck" +bs_id, u);
+	}
+
+	// ITS condition added by Durga Mohan- CHG0089895 ITS/XAAS CER Project- 25-Apr-2024   
+	//Added code for IPS -XaaS Line -for Pricing - Supriya -CHG0089894 19-Apr-2024
+	siteName = lower(_system_supplier_company_name);
+	perfT = getcurrenttimeinmillis();
+	resultSet = bmql("select Username,Password,InstancesName from INT_SYSTEM_DETAILS where InstancesName = $siteName");
+	//loop through the records
+	for record in resultSet {
+		authString = "Basic " + encodebase64(get(record,"Username") + ":" + get(record,"Password"));
+		endpoint = get(record,"InstancesName");
+	}
+	logtime("PERF_8_3 BMQL INT_SYSTEM_DETAILS (credentials)", getcurrenttimeinmillis() - perfT);
+
+	headerDict = dict("string");
+	put(headerDict, "Content-Type", "application/json");
+	put(headerDict, "Authorization", authString );
+	//added by Namrata to restrict pricing portal API
+	//if(isHardwareConfigured == false AND ITSFlag == false){ //commented by Sheema - Defect #34829
+	if(containsMPSLines OR IBPFlag OR XAASFlag){ //Added by Sheema - Defect #34829
+	calculatePriceURL = "https://"+_system_company_name+".bigmachines.com/rest/v12/pricing/actions/calculatePrice";
+	response  = dict("string");
+	//PERF_8_3: external REST call to the pricing engine - payload contains EVERY line, so it grows with quote size
+	perfApiStart = getcurrenttimeinmillis();
+	response = urldata(calculatePriceURL , "POST", headerDict , CommonHeaderInputStr);
+	logtime("PERF_8_3 REST calculatePrice API (payload chars=" + string(len(CommonHeaderInputStr)) + ")", getcurrenttimeinmillis() - perfApiStart);
+
+	///print "CommonHeaderInputStr" ; print CommonHeaderInputStr;
+	// End - Durga Mohan 22-May-2024 Code to eliminate API call redundancy 
+	print "****************************";
+	print CommonHeaderInputStr;
+	print response ;
+	responseMsgBody = get(response, "Message-Body");
+	if(responseMsgBody<>"" AND NOT ISNULL(responseMsgBody)){
+		put(inputDict,"updateLineItemsJson",responseMsgBody);
+	}
+
+	// Below line is added by Durga Mohan as part of Equipment Prices incident INC2795009  27-06-2024
+	result = result + "1~iTSPricingRuleResponse_c~"+responseMsgBody+"|";
+	}	
+}
+	
+
+
+//Start -- Moved attribute script into before formlas on 20-Jan-2026 by Sathyanarayana
+retJson=  json();
+jsonput(retJson,"QTY",join(qtyArray,"@"));
+jsonput(retJson,"LINKEDITEM",join(linkedArray ,"@"));
+jsonput(retJson,"QTYSA",join(qtySAArray ,"@"));
+jsonput(retJson,"EXTENDEDSUPPORT",join(extendedSupportTermArray ,"@"));
+jsonput(retJson,"DISCOUNTTYPE",join(discountTypeArray,"@"));
+jsonput(retJson,"DISCOUNTAMOUNT",join(discountAmountArray,"@"));
+jsonput(retJson,"PROMOTIONCODE",join(promotionCodeArray,"@"));
+jsonput(retJson,"PROMOTIONCOMMENTS",join(promotionCOmmentsArray,"@"));
+jsonput(retJson,"UNITSELLING",join(unitSellingPriceArray,"@"));
+
+//End
+/*	
+for eachDoc in docNumArrayForPIO{
+	parentDocNumber = "";
+	if(containskey(PIODocNumDict,eachDoc + "ParentDocNumber")){
+		parentDocNumber = get(PIODocNumDict,eachDoc + "ParentDocNumber");
+	}
+	if(parentDocNumber <> "" AND containskey(PIODocNumDict,parentDocNumber + "-shippingAddress_c")){
+		shippingAddress_c = get(PIODocNumDict,ParentDocNumber + "-shippingAddress_c");
+		projectNumber_l = get(PIODocNumDict,ParentDocNumber + "-projectNumber_l");
+		locationSiteID_l = get(PIODocNumDict,ParentDocNumber + "-locationSiteID_l");
+		locationNumber_l = get(PIODocNumDict,ParentDocNumber + "-locationNumber_l");
+		quickReference_c = get(PIODocNumDict,ParentDocNumber + "-quickReference_c");
+		siteReference_c = get(PIODocNumDict,ParentDocNumber + "-siteReference_c");
+		earliestDeliveryDate_c = get(PIODocNumDict,ParentDocNumber + "-earliestDeliveryDate_c");
+
+		result = result + eachDoc + tilde + "locationSiteID_l" + tilde + locationSiteID_l + delim;
+		result = result + eachDoc + tilde + "locationNumber_l" + tilde + locationNumber_l + delim;
+		result = result + eachDoc + tilde + "projectNumber_l" + tilde + projectNumber_l + delim;
+		result = result + eachDoc + tilde + "address_contact_c" + tilde + shippingAddress_c + delim;
+		result = result + eachDoc + tilde + "shippingAddress_c" + tilde + shippingAddress_c + delim;
+		result = result + eachDoc + tilde + "quickReference_c" + tilde + quickReference_c + delim;
+		result = result + eachDoc + tilde + "siteReference_c" + tilde + siteReference_c + delim;
+
+	}
+
+
+
+*/
+//Start - Durga Mohan 22-May-2024 To eliminate API call redundancy 
+
+//END_01_19_2024 MPS_PERFORMANCE_CHANGES_CalculatePriceAPICall
+if(RECORDLOGTIME_FLAG){
+t2=getCurrentTimeInMillis();
+currentDateTime = getstrdate();
+u = t2-t1;
+logtime("Save/CalculateCheck1" +bs_id, u);
+}
+if(sizeofarray(itemTypeArray) > 0){
+	perfT = getcurrenttimeinmillis();
+	processGroupArray1 = util.getAllProcessGroup(itemTypeArray);
+	logtime("PERF_8_3 util.getAllProcessGroup", getcurrenttimeinmillis() - perfT);
+	modelsContainsInQuoteStr = join(processGroupArray1,"$$");
+}
+//START_DESC added by Namrata defect 33042 in 2.0
+if(sizeofarray(businessLineArr) > 0){
+modelsContainsInQuoteStr = modelsContainsInQuoteStr + "$$" + join(businessLineArr,"$$");
+
+}
+//END_DESC added by Namrata defect 33042 in 2.0
+if(sizeofarray(processGroupArray) > 0 AND modelsContainsInQuoteStr <> ""){
+	modelsContainsInQuote = modelsContainsInQuoteStr + "$$" + join(processGroupArray,"$$");
+}elif(sizeofarray(processGroupArray) > 0 AND modelsContainsInQuoteStr == ""){
+	modelsContainsInQuote = join(processGroupArray,"$$");
+}elif(modelsContainsInQuoteStr <> ""){
+	modelsContainsInQuote = modelsContainsInQuoteStr;
+}
+setattributevalue("1","modelsContainsInQuote_t",modelsContainsInQuote);//01_11_2024 MPS_PERFORMANCE_CHANGES #CHG0085215  Added by Vasundhara
+if(sizeofarray(partNumberArray) > 0){
+    perfT = getcurrenttimeinmillis();
+    partsData = util.storePartsDataInJsonString(partNumberArray);
+    logtime("PERF_8_3 util.storePartsDataInJsonString (parts=" + string(sizeofarray(partNumberArray)) + ")", getcurrenttimeinmillis() - perfT);
+   if(partsData <> "{}"){
+	print "save / calculate : jsonpath error : partsData : " + partsData ;
+		result = result + "1~partsDataText_t~" + partsData + "|";
+	}
+	put(inputDict,"partsDataText_t",partsData);
+	put(resultDict1,"partsDataText_t", partsData); // Performance Tuning - Added by Sheema
+}
+
+//Added by Brij kishore to restrict pricing libraries after pricing approval defect#31124
+if(pricingApprovedCondition){
+	if(modelsContainsInQuote == "Ricoh Managed Services" OR modelsContainsInQuote == "Managed Print Services"){
+		if(modelsContainsInQuote == "Ricoh Managed Services"){
+			put(inputDict,"modelsContainsInQuote_t",modelsContainsInQuote);
+			put(inputDict,"TriggersOn","Save/Calculate");//CR28 Defect 17654 Added by 
+			put(inputDict, "ActionTrigger", "Before Formulas"); //added By Namrata for Discount INC
+			perfT = getcurrenttimeinmillis();
+			result = result + commerce.pricingMainBeforeFormulas(inputDict);
+			logtime("PERF_8_3 commerce.pricingMainBeforeFormulas site1_RMS", getcurrenttimeinmillis() - perfT);
+			perfT = getcurrenttimeinmillis();
+			result = result + commerce.pricingMainBeforeFormulasExtended_c(inputDict);
+			logtime("PERF_8_3 commerce.pricingMainBeforeFormulasExtended_c site1_RMS", getcurrenttimeinmillis() - perfT);
+		   }else{
+			put(inputDict,"modelsContainsInQuote_t",modelsContainsInQuote);
+			put(inputDict,"TriggersOn","Save/Calculate");
+			put(inputDict,"derivedFromFlag","Before Formulas");
+			put(inputDict, "ActionTrigger", "Before Formulas"); //added By Namrata for Discount INC
+
+		   perfT = getcurrenttimeinmillis();
+		   result = result + commerce.pricingMainBeforeFormulas(inputDict);
+		   logtime("PERF_8_3 commerce.pricingMainBeforeFormulas site2_MPS", getcurrenttimeinmillis() - perfT);
+		   print "RR: Debug - Before Formula -> Line 621";
+		   		perfT = getcurrenttimeinmillis();
+				result = result + commerce.pricingMainBeforeFormulasExtended_c(inputDict);
+				logtime("PERF_8_3 commerce.pricingMainBeforeFormulasExtended_c site2_MPS", getcurrenttimeinmillis() - perfT);
+			}
+		//result = result + commerce.populatePIMAReport("");
+	}elif(modelsContainsInQuote <> ""){
+		perfT = getcurrenttimeinmillis();
+		result = result + commerce.calculateContractedPricing(resultDict1);
+		logtime("PERF_8_3 commerce.calculateContractedPricing", getcurrenttimeinmillis() - perfT);
+	  put(inputDict,"modelsContainsInQuote_t",modelsContainsInQuote);
+		put(inputDict,"TriggersOn","Save/Calculate");//CR28 Defect 17654 Added by Vasundhara
+
+	   perfT = getcurrenttimeinmillis();
+	   result = result + commerce.pricingMainBeforeFormulas(inputDict);
+	   logtime("PERF_8_3 commerce.pricingMainBeforeFormulas site3_OTHER", getcurrenttimeinmillis() - perfT);
+	   put(inputDict,"RunEFEE","True");
+           put(inputDict, "ActionTrigger", "Before Formulas"); //added By Namrata for Discount INC
+
+		perfT = getcurrenttimeinmillis();
+		result = result + commerce.pricingMainBeforeFormulasExtended_c(inputDict);
+		logtime("PERF_8_3 commerce.pricingMainBeforeFormulasExtended_c site3_OTHER", getcurrenttimeinmillis() - perfT);
+		
+		perfT = getcurrenttimeinmillis();
+		result = result + commerce.pricingMain();
+		logtime("PERF_8_3 commerce.pricingMain", getcurrenttimeinmillis() - perfT);
+	}
+
+	modelsInQuoteArray = split(modelsContainsInQuote, "$$");
+	if(findinarray(modelsInQuoteArray, "Ricoh Managed Services") <> -1){
+		put(inputDict,"modelsContainsInQuote_t",modelsContainsInQuote);
+		put(inputDict,"TriggersOn","Save/Calculate");//CR28 Defect 17654 Added by Vasundhara
+		
+		perfT = getcurrenttimeinmillis();
+		result = result + commerce.pricingMainBeforeFormulas(inputDict);
+		logtime("PERF_8_3 commerce.pricingMainBeforeFormulas site4_RMSARRAY", getcurrenttimeinmillis() - perfT);
+		put(inputDict,"RunEFEE","");
+		put(inputDict, "ActionTrigger", "Before Formulas"); //added By Namrata for Discount INC
+		
+		perfT = getcurrenttimeinmillis();
+		result = result + commerce.pricingMainBeforeFormulasExtended_c(inputDict);
+		logtime("PERF_8_3 commerce.pricingMainBeforeFormulasExtended_c site4_RMSARRAY", getcurrenttimeinmillis() - perfT);
+		perfT = getcurrenttimeinmillis();
+		result = result + commerce.populatePIMAReport("");
+		logtime("PERF_8_3 commerce.populatePIMAReport (blank)", getcurrenttimeinmillis() - perfT);
+	   }
+		param1 = "";
+	//start_bau_CHG0096053_created by gowtham on o7/08/2025
+
+	if(find(modelsContainsInQuote_t,"IT Services") <> -1 OR find(modelsContainsInQuote_t,"ITS") <> -1){
+	 perfT = getcurrenttimeinmillis();
+	 result = result + commerce.iTSSolveFor_c();
+	 logtime("PERF_8_3 commerce.iTSSolveFor_c", getcurrenttimeinmillis() - perfT);
+	 }
+
+	//start_bau_CHG0096053_created by gowtham on o7/08/2025
+		/*if((find(modelsContainsInQuote_t,"Ricoh Managed Services") <> -1) OR find(modelsContainsInQuote_t,"Managed Print Services") <> -1 AND param1 == ""){     
+		result = result + commerce.totalmsmpsPIMAreport_c("");
+		}
+
+	if((find(modelsContainsInQuote_t,"Ricoh Managed Services") <> -1) OR find(modelsContainsInQuote_t,"Managed Print Services") <> -1 AND param1 == "Price Analyst"){
+		result = result + commerce.populatePIMAReport("Price Analyst")+commerce.populatePIMAReportForMPS_c("Price Analyst")+commerce.totalmsmpsPIMAreport_c("Price Analyst");
+		}*/
+
+	if((find(modelsContainsInQuote_t,"Ricoh Managed Services") <> -1 OR find(modelsContainsInQuote_t,"Managed Print Services") <> -1) AND param1 == ""){     
+	   perfT = getcurrenttimeinmillis();
+	   result = result + commerce.totalmsmpsPIMAreport_c("");
+	   logtime("PERF_8_3 commerce.totalmsmpsPIMAreport_c (blank)", getcurrenttimeinmillis() - perfT);
+	}
+
+	if((find(modelsContainsInQuote_t,"Ricoh Managed Services") <> -1)  AND param1 == "Price Analyst"){
+	  perfT = getcurrenttimeinmillis();
+	  result = result + commerce.populatePIMAReport("Price Analyst");
+	  logtime("PERF_8_3 commerce.populatePIMAReport (PriceAnalyst)", getcurrenttimeinmillis() - perfT);
+	  }
+
+	if(find(modelsContainsInQuote_t,"Managed Print Services") <> -1 AND param1 == "Price Analyst"){
+		perfT = getcurrenttimeinmillis();
+		result = result +commerce.populatePIMAReportForMPS_c("Price Analyst");
+		logtime("PERF_8_3 commerce.populatePIMAReportForMPS_c (PriceAnalyst)", getcurrenttimeinmillis() - perfT);
+	  }
+
+	if((find(modelsContainsInQuote_t,"Ricoh Managed Services") <> -1 OR find(modelsContainsInQuote_t,"Managed Print Services") <> -1) AND param1 == "Price Analyst"){
+	   perfT = getcurrenttimeinmillis();
+	   result = result + commerce.totalmsmpsPIMAreport_c("Price Analyst");
+	   logtime("PERF_8_3 commerce.totalmsmpsPIMAreport_c (PriceAnalyst)", getcurrenttimeinmillis() - perfT);
+	  }
+	//commented by Namrata.Calling PIMA lib in after forumulas. MPS CHG0085215
+	/*if(MPSFlag){result = result + commerce.populatePIMAReportForMPS_c("");}*/
+
+	/*Added by CP for TS Lines*/
+	if(tsLinesFlag){
+			put(inputDict,"modelsContainsInQuote_t","TSLines");
+			put(inputDict,"TriggersOn","Save/Calculate");
+			put(inputDict,"RunEFEE","");
+			put(inputDict, "ActionTrigger", "Before Formulas");//added by Namrata for Discount INC
+
+	   perfT = getcurrenttimeinmillis();
+	   result = result + commerce.pricingMainBeforeFormulasExtended_c(inputDict);
+	   logtime("PERF_8_3 commerce.pricingMainBeforeFormulasExtended_c site5_TSLINES", getcurrenttimeinmillis() - perfT);
+	}
+	/*end here*/
+	if(RECORDLOGTIME_FLAG){
+	t3=getCurrentTimeInMillis();
+	currentDateTime = getstrdate();
+	u = t3-t2;
+	logtime("Save/CalculateCheck2" +bs_id, u);
+	}
+	//Start - Adedd by Durga Mohan for CHG0089895 for ITS Pricing Protal - 03/05/2024
+	//result = result + commerce.promotionPricing(); //Promotionpricing library function is changed with Promotionpricingforallprocesses for passing parameters for ITS Pricing
+	//Added by Durga Mohan as part of RGC - Start
+	starttime = getcurrenttimeinmillis();
+	SummaryData = commerce.promotionPricingForAllProcessesGroupsExtended_c(resulturnStringDict, resulturnIntegerDict, resulturnFloatDict, resulturnBooleanDict, inputDict);
+	endtime = getcurrenttimeinmillis();
+	logtime("Sag - save calculate COMMON- commerce.promotionPricingForAllProcessesGroupsExtended_c", endtime-starttime);
+
+	put(inputDict,"QuoteSummary",SummaryData);
+	//Added by Durga Mohan as part of RGC - END
+	starttime = getcurrenttimeinmillis();
+	result = result + commerce.promotionPricingForAllProcessesGroups_c(resulturnStringDict, resulturnIntegerDict, resulturnFloatDict, resulturnBooleanDict, inputDict);
+	endtime = getcurrenttimeinmillis();
+	logtime("Sag - save calculate COMMON- commerce.promotionPricingForAllProcessesGroups_c", endtime-starttime);
+
+	perfT = getcurrenttimeinmillis();
+	result = result + commerce.applyDiscountInLIG_c();			
+	logtime("PERF_8_3 commerce.applyDiscountInLIG_c", getcurrenttimeinmillis() - perfT);
+
+	//End - Adedd by Durga Mohan for CHG0089895 for ITS Pricing Protal - 03/05/2024
+	if(RECORDLOGTIME_FLAG){
+	t4=getCurrentTimeInMillis();
+	currentDateTime = getstrdate();
+	u = t4-t3;
+	logtime("Save/CalculateCheck3" +bs_id, u);
+	}
+
+	//Validation Model Changes - START
+	if(sizeofarray(parentDocNumArray) == 0 AND sizeofarray(docNumArray) > 0){
+		validateModel = false;
+	}
+	for eachDocNum in modelDocNumArray{
+		validateModel = false;
+		if(findinarray(parentDocNumArray,eachDocNum) == -1){
+			validateModel = true;
+			break;
+		}
+	}
+}
+//Validation Model Changes - END
+
+starttime = getcurrenttimeinmillis();
+result = result + commerce.setTeamMembersCPQRISE();
+endtime = getcurrenttimeinmillis();
+logtime("Sag - save calculate COMMON- commerce.setTeamMembersCPQRISE", endtime-starttime);
+print result ;
+result = result + "1~modelsContainsInQuote_t~" + modelsContainsInQuote + "|";
+result = result  + "1~validateModel_t~" + string(validateModel) + "|";
+//result = result   + "1~totalQty_t~" + string(totalQtyVar) + "|";
+result = result   + "1~checkForMSDealPricing~true|";
+//code Addded by Akshay
+//result = result + commerce.promotionPricing(); commented the code added by Akshya which is affecting "INC2646493"
+//Adding the pricelist call to get the updated pricelist values from RISE-Subha-08/31/2023-PS Pricing//
+//if(_system_current_step_var=="pending_process"){
+    //starttime = getcurrenttimeinmillis();
+	//result = result + commerce.setPricelistRISECPQ();
+    //endtime = getcurrenttimeinmillis();
+   // logtime("Sag - save calculate - commerce.setPricelistRISECPQ", endtime-starttime);
+//}
+
+param1 = "";
+//result = result + commerce.populatePIMAReportForIBP_c(param1);
+if(RECORDLOGTIME_FLAG){
+t5=getCurrentTimeInMillis();
+currentDateTime = getstrdate();
+u = t5-t4;
+logtime("Save/CalculateCheck4" +bs_id, u);
+}
+//Sheema CHG0097679
+LeaseTerm = 0;
+if(acquisitionType_t == "Lease")
+{
+	If(Leasing_noOfAdvancePayments_t_c <> "" AND Leasing_noOfAdvancePayments_t_c == "fIRSTMONTH")
+	{
+		result = result   + "1~Leasing_numberOfAdvancePayments_t_c~1|";
+	}
+	elif(Leasing_noOfAdvancePayments_t_c <> "" AND Leasing_noOfAdvancePayments_t_c == "fIRSTANDLASTMONTH")
+	{
+		result = result   + "1~Leasing_numberOfAdvancePayments_t_c~2|";
+	}
+	else
+	{
+		result = result   + "1~Leasing_numberOfAdvancePayments_t_c~0|";
+	}
+	if(leaseTerm_t == "Other Terms")
+	{
+		LeaseTerm = otherTerm_t;
+	}
+	else
+	{
+		if(leaseTerm_t <> "selectOne" AND leaseTerm_t <>"")
+		{
+			LeaseTerm = atoi(leaseTerm_t);
+		}
+	}
+	result = result+"1~Leasing_leaseTerm_t_c~"+string(LeaseTerm)+"|";
+}
+//End of CHG0097679
+//CHG0097680: CPQ changes for RCI AND RUS
+//Phase 2.0 : Resource Details : #Req7 
+RusRsiVal= ((rACUserOrg_c == "RUS")OR (rACUserOrg_c == "RCI"));
+if(pIOFlag_c OR RusRsiVal){
+	//if(quoteStep_t <> "sentToCustomer" AND quoteStep_t <> "customerApproved" AND quoteStep_t <> "Order In Progress" AND quoteStep_t <> "orderedBeingFulfilled"){
+		//result = result + commerce.oppDetailsImportRISECPQ();
+
+    starttime = getcurrenttimeinmillis();
+	size = range(jsonarraysize(tradeInItems_t_c));
+	if(jsonarraysize(tradeInItems_t_c)>0){
+          result = result + commerce.populateTradeInItemData_c(true);
+           endtime = getcurrenttimeinmillis();
+            logtime("Sag - save calculate PIO RUS RCI- commerce.populateTradeInItemData_c", endtime-starttime);
+    	}   
+
+    starttime = getcurrenttimeinmillis();
+	result = result + commerce.fetchItemDetails_c("Save", "", "", "", "");
+    endtime = getcurrenttimeinmillis();
+    logtime("Sag - save calculate PIO RUS RCI- commerce.fetchItemDetails_c", endtime-starttime);
+
+    starttime = getcurrenttimeinmillis();
+	result = result + commerce.oppDetailsImportRISECPQ();
+    endtime = getcurrenttimeinmillis();
+    logtime("Sag - save calculate PIO RUS RCI- commerce.oppDetailsImportRISECPQ", endtime-starttime);
+
+    starttime = getcurrenttimeinmillis();
+	result = result + commerce.setDetailsOnSaveCalculate_c("","","","","");
+    endtime = getcurrenttimeinmillis();
+    logtime("Sag - save calculate PIO RUS RCI- commerce.setDetailsOnSaveCalculate_c", endtime-starttime);
+
+    starttime = getcurrenttimeinmillis();
+	result = result + commerce.setPMODetails_c("", "");
+    endtime = getcurrenttimeinmillis();
+    logtime("Sag - save calculate PIO RUS RCI- commerce.setPMODetails_c", endtime-starttime);
+
+    starttime = getcurrenttimeinmillis();
+	result = result + commerce.setTSLineItemsData_c();
+    endtime = getcurrenttimeinmillis();
+    logtime("Sag - save calculate PIO RUS RCI- commerce.setTSLineItemsData_c", endtime-starttime);
+    CPJson = json();
+   if ( _system_current_step_var == "pending_process" AND (processExclusionFlags_c == "" OR processExclusionFlags_c == "{}" OR (combinedPriceListMenu_c <> getoldvalue(combinedPriceListMenu_c))) AND (acquisitionType_t == "Lease")) //Added the Acquisition type check for Defect #32825
+{
+	//jsonput(CPJson, "PriceList", combinedPriceListMenu_c); 
+	// jsonput(CPJson, "PriceList", pricelistR12Id_c); // Replaced with pricelist id instead of PricelistName
+	// Added this below code by Ramesh for Pricelist Change 04/10/2026
+
+	if (NOT isnull(combinedPriceListArraySet_c) AND jsonarraysize(combinedPriceListArraySet_c) > 0) {
+		indices = range(jsonarraysize(combinedPriceListArraySet_c));
+		for index in indices {
+			rowJson = json(jsonarrayget(combinedPriceListArraySet_c, index));
+			priceListName = jsonget(rowJson, "combinedPriceListName_c");
+			if (priceListName == combinedPriceListMenu_c) {
+				priceListId = jsonget(rowJson, "combinedPriceListID_c");
+				jsonput(CPJson, "PriceList", priceListId);
+				break;
+			}
+		}
+	}
+	// end
+
+	jsonput(CPJson, "Channel", accountChannel_c);
+	jsonput(CPJson, "Org", rACUserOrg_c);
+	jsonput(CPJson, "LeaseType", leaseTypeList_c); // Added by Ramesh for Defect #30435
+	perfT = getcurrenttimeinmillis();
+	CPJson = util.customerProgramTypesExclusionLogic_c(CPJson);
+	logtime("PERF_8_3 util.customerProgramTypesExclusionLogic_c", getcurrenttimeinmillis() - perfT);
+	print "CPJson";
+	print CPJson;
+	result = result + "1~processExclusionFlags_c~" + jsontostr(CPJson) + "|";
+	// Added by Ramesh for Defect #30435
+	IaStatus = jsonget(CPJson, "IA_STATUS");
+	if (NOT isnull(IaStatus) AND IaStatus <> "") {
+		if (IaStatus == "Y") {
+			result = result + "1~investorAgreement_c~" + string(true) + "|";
+		}
+	}
+	DefPassOption = jsonget(CPJson, "DefaultPassOption");
+	if (NOT isnull(DefPassOption) AND DefPassOption <> "" AND rACUserOrg_c == "RCI") { // Adding default pass value for customer program
+		result = result + "1~Leasing_PassOptions_c~" + DefPassOption + "|";
+	}
+
+	// end
+
+}
+ 
+	//Added by Ninad 04-12-2024 for fetching CID Number from R12 - CHG0094000 
+	//result = result + commerce.integrationCallToOIC_c("SaveCalculateForCIDNumber","","","","");
+	
+	//result = result + commerce.generatePICKUPFEEEDPCodesForTradeInItems_c();
+	//result = result + commerce.generateHDSTANDARDEDPCodeForTradeInItems_c();
+
+    starttime = getcurrenttimeinmillis();
+	result = result + commerce.updateQuoteLevelFields();
+    endtime = getcurrenttimeinmillis();
+    logtime("Sag - save calculate COMMON- commerce.updateQuoteLevelFields", endtime-starttime);
+
+	//if(HWaaSModelExist){
+        starttime = getcurrenttimeinmillis();
+		if(rACUserOrg_c == "RUS"){
+			result = result + commerce.generatePICKUPFEEEDPCodesForTradeInItems_c();
+		}
+		elif(rACUserOrg_c == "RCI"){
+			result = result + commerce.eQRemovalProductAdddeleteToLIG_c();
+		}
+        endtime = getcurrenttimeinmillis();
+        logtime("Sag - save calculate HWaaSModelExist PIO RUS RCI- commerce.generatePICKUPFEEEDPCodesForTradeInItems_c", endtime-starttime);
+
+        starttime = getcurrenttimeinmillis();
+		result = result + commerce.generateHDSTANDARDEDPCodeForTradeInItems_c();
+        endtime = getcurrenttimeinmillis();
+        logtime("Sag - save calculate HWaaSModelExist PIO RUS RCI- commerce.generateHDSTANDARDEDPCodeForTradeInItems_c", endtime-starttime);
+        	starttime = getcurrenttimeinmillis();
+        	result = result + commerce.generateREFINANCEEDPCodeForTradeInItems_c();//brij added refinance library for new row add in LIG
+	 endtime = getcurrenttimeinmillis();
+        logtime("Sag - save calculate HWaaSModelExist PIO RUS RCI- commerce.generateREFINANCEEDPCodeForTradeInItems_c", endtime-starttime);
+        perfT = getcurrenttimeinmillis();
+        result = result + commerce.setMLAMSAMMSAAgreementDetailsArraySet_c();
+        logtime("PERF_8_3 commerce.setMLAMSAMMSAAgreementDetailsArraySet_c", getcurrenttimeinmillis() - perfT);
+	//}
+}
+
+//29/05/2025 CHG0097680: CPQ changes for RCI AND RUS - Chakri
+
+if(internalComments <> ""){
+    starttime = getcurrenttimeinmillis();
+	result = result + commerce.setDesignAndSalesComments_c();
+    endtime = getcurrenttimeinmillis();
+    logtime("Sag - save calculate - commerce.setDesignAndSalesComments_c", endtime-starttime);
+}
+
+contactsJson = json();
+	mainContactArray = mainContactArraySet_c;
+	if(jsonarraysize(mainContactArraySet_c)>0){
+		contactsRange = range(jsonarraysize(mainContactArraySet_c));
+		for contact in contactsRange {
+			contactsJson = jsonarrayget(mainContactArraySet_c, contact, "json");
+			//selectCont = jsonget(contactsJson, "selectMain_c","string","");
+			//firstNameMain_c 
+			role = jsonget(contactsJson, "roleMain_c","string","");
+			
+			if(role == "" ){
+				throwerror("Cotact Role cannot be empty.");
+			}
+		}
+	}
+
+//added by namrata for poc . To be removed after testing. 
+currentdate = datetostr(getdate(),"dd/MM/yyyy");
+LeaseDetails = Json();
+LeasingDerivationInputs= json();
+IncumbenLeaseCo = "";
+CurrentLeaseCo = "";
+ApprovalStatus = "";
+OverrideLessor = "";
+creditAutoApproved = false;
+IsRecallfound = false;
+DiffPerc = 0.0;
+BuyoutDetails = Leasing_buyoutDetailsJSON_t_c;
+CreditAppStatus = Leasing_creditApplicationStatus_t_c;
+ApprovalAmount = Leasing_approvalAmount_t_c;
+LCACustomerNumber = Leasing_leaseConnectCustomer_t_c;
+starttime = getcurrenttimeinmillis();
+BuyoutDetails = commerce.calculateTradeInorBuyoutLessorAndAmount_c();
+if(Leasing_leaseCreditFlags_t_c <> "")
+{
+	leaseflags = json(Leasing_leaseCreditFlags_t_c);
+	ApprovalStatus = jsonget(leaseflags, "Lease_Override_Approval","string");
+}
+if(ApprovalStatus == "Approved")
+{
+	OverrideLessor= Leasing_overrideLeaseProvider_t_c;
+}
+else
+{
+	OverrideLessor = "";
+}
+endtime = getcurrenttimeinmillis();
+logtime("Sag - save calculate COMMON- commerce.calculateTradeInorBuyoutLessorAndAmount_c", endtime-starttime);
+jsonput(LeasingDerivationInputs, "BuyOutDetailsJSON",BuyoutDetails);
+//jsonput(LeasingDerivationInputs, "ZBAflag", ZBAflag_t);
+//Date: 11/08/26 Brij: Commented above for CR092 and Added new ZBA Type Attribute
+if(accountSalesProfileType_c == "ZBA"){
+jsonput(LeasingDerivationInputs, "ZBAflag", true);
+}
+jsonput(LeasingDerivationInputs, "OverrideLessor",OverrideLessor);
+jsonput(LeasingDerivationInputs, "acquisitionType",acquisitionType_t);
+jsonput(LeasingDerivationInputs, "accountnumber", oracleAccountNumber_t);
+jsonput(LeasingDerivationInputs, "IAflag",investorAgreementsIA_c);
+jsonput(LeasingDerivationInputs, "UserOrg", rACUserOrg_c);
+if((Leasing_creditApplicationStatus_t_c == "Not Initiated") AND (acquisitionType_t == "Lease") AND rACUserOrg_c == "RUS" AND (investorAgreementStatus_c <> "Approved") AND (leaseTypeList_c <> "OPERATING RENTAL"))
+{
+	starttime = getcurrenttimeinmillis();
+        LeaseDetails = util.leaseCoDerivationForRUS(LeasingDerivationInputs);
+         endtime = getcurrenttimeinmillis();
+        logtime("Sag - save calculate - util.leaseCoDerivationForRUS ", endtime-starttime);
+	IncumbenLeaseCo = jsonget(LeaseDetails, "Leasing_incumbentLeaseCompany_t_c");
+	CurrentLeaseCo = jsonget(LeaseDetails,"Leasing_currentLeaseCoBeingChecked_t_c");
+	perfT = getcurrenttimeinmillis();
+	Recordset = bmql("select LeasePartnerName, StartDtofCredit, ExpDateofCredit, LineofCreditAmount from RAC_Credit_Accounts where OracleAccountNumber = $oracleAccountNumber_t");
+	for each in recordset
+	{
+		creditAmount = get(each, "LineofCreditAmount");
+		ExpDateofCredit = get(each, "ExpDateofCredit");
+		StartDateofCredit = get(each, "StartDtofCredit");
+		LeaserName = get(each, "LeasePartnerName");
+		if(ExpDateofCredit<>"")
+		{
+			if((comparedates(strtodate(currentdate,"dd/MM/yyyy"),strtodate(ExpDateofCredit,"dd/MM/yyyy" ) ) == -1) AND (atof(creditAmount) >Leasing_totalLeasePayment_t_c) AND (LeaserName == IncumbenLeaseCo))
+			{
+				creditAutoApproved = true;
+				CurrentLeaseCo = IncumbenLeaseCo;
+			}
+			else
+			{
+				CurrentLeaseCo = "MAN";
+			}	
+		}
+		else
+		{
+				CurrentLeaseCo = "MAN";
+		}
+	}
+	logtime("PERF_8_3 BMQL RAC_Credit_Accounts", getcurrenttimeinmillis() - perfT);
+	result = result +"1~Leasing_incumbentLeaseCompany_t_c~"+IncumbenLeaseCo+delim;
+	result = result +"1~Leasing_currentLeaseCoBeingChecked_t_c~"+CurrentLeaseCo+delim;
+}
+if(Leasing_leaseCreditFlags_t_c <> "")
+{
+	leaseflags = json(Leasing_leaseCreditFlags_t_c);
+	if((jsonpathcheck(leaseflags,"$..RECALLED_CREDIT_APP")) AND Leasing_creditApplicationStatus_t_c == "APPROVED" AND (acquisitionType_t == "Lease") AND rACUserOrg_c == "RUS")
+	{
+		if(Leasing_totalLeasePayment_t_c <> 0.0)
+		{
+			DiffPerc = (Leasing_totalLeasePayment_t_c-Leasing_approvalAmount_t_c)/Leasing_totalLeasePayment_t_c;
+		}
+		if(DiffPerc > 0.15)
+		{
+			CreditAppStatus= "Not Initiated";
+			ApprovalAmount = 0.0;
+			LCACustomerNumber = "";
+			result = result +"1~Leasing_Decision_t_c~"+"|"; //Added by Sheema - Defect #32143
+		}
+	}
+}
+if(rACUserOrg_c == "RCI" AND leaseTypeList_c <> "OPERATING RENTAL" AND  acquisitionType_t == "Lease")
+{
+	BillingOption = billingOption_c;
+	leaseBilling_LCL = leaseBillingFrequency_c;
+	// Added by Ramesh for INC3210651: Start
+	if(upper(Leasing_Decision_t_c) == "DECLINED" AND (isnull(Leasing_changeRequestLogNumber_c) OR Leasing_changeRequestLogNumber_c == "")){
+		CreditAppStatus = upper(Leasing_Decision_t_c);
+	}
+	// Added by Ramesh for INC3210651: End
+	//CreditAppStatus = upper(Leasing_Decision_t_c);
+        perfT = getcurrenttimeinmillis();
+        LeaseDetails = util.leaseCoDerivationForRUS(LeasingDerivationInputs);
+        logtime("PERF_8_3 util.leaseCoDerivationForRUS (RCI)", getcurrenttimeinmillis() - perfT);
+	IncumbenLeaseCo = jsonget(LeaseDetails, "Leasing_incumbentLeaseCompany_t_c");
+	if(billingOption_c == "Advanced")
+	{
+		BillingOption = "Advance";
+	}
+	if(leaseBillingFrequency_c == "Annually")
+	{
+		leaseBilling_LCL = "Annual";
+	}
+	elif(leaseBillingFrequency_c == "Semi-Annually")
+	{
+		leaseBilling_LCL = "Semi-Annual";
+	}
+	result = result +"1~Leasing_incumbentLeaseCompany_t_c~"+IncumbenLeaseCo+delim;
+	result = result +"1~Leasing_billing_c~"+BillingOption+delim;
+	result = result +"1~Leasing_frequency_c~"+leaseBilling_LCL+delim;
+}
+result = result +"1~Leasing_acquisitionType_t_c~"+acquisitionType_t+"|";
+result = result +"1~Leasing_leaseType_t_c~"+upper(leaseTypeList_c)+"|";
+result = result +"1~Leasing_softwareAmount_t_c~0"+"|";
+result = result+"1~Leasing_mainPhoneNumber_t_c~"+customerContactNumber_t+"|";
+result = result+"1~Leasing_creditAccountAutoApproved_t_c~"+string(creditAutoApproved)+"|";
+result = result+"1~Leasing_creditApplicationStatus_t_c~"+CreditAppStatus+"|";
+result = result+"1~Leasing_approvalAmount_t_c~"+string(ApprovalAmount)+"|";
+result = result+"1~Leasing_leaseConnectCustomer_t_c~"+LCACustomerNumber+"|";
+//result = result + "1~pricingTableQueryJson_c~"+jsontostr(PricingTableQueryJson) +"|";
+//Added by Sathyanarayana on 20-Jan-2026 
+result = result + "1~primaryLeadAvailableCheck~" + string(primaryLeadFlag) + "|";
+result = result + "1~vendorQuoteItemsList~" + join(vendorList, "##") + "|";
+result = result + "1~editableTrackerFields_quote~" + jsontostr(retJson) + "|";
+result = result + "1~removedLineItemsGridStr~" + join(tempArray,"##") + "|";
+//END
+
+
+
+if(tSLinesIdentifierText_c <> "" AND ISNULL(tSLinesIdentifierText_c) == false){
+    starttime = getcurrenttimeinmillis();
+	result = result + commerce.setTSCommerceAttributesFromTSConfig_c();
+    endtime = getcurrenttimeinmillis();
+    logtime("Sag - save calculate TSLINE IDENTIFIED- commerce.setTSCommerceAttributesFromTSConfig_c", endtime-starttime);
+}
+if(RECORDLOGTIME_FLAG){
+t6=getCurrentTimeInMillis();
+u = t6-t5;
+logtime("Save/CalculateCheckFinal" +bs_id, u);
+}
+perfT = getcurrenttimeinmillis();
+result = result + commerce.getCombinedPriceListMenu_c("OLD QUOTE");
+logtime("PERF_8_3 commerce.getCombinedPriceListMenu_c", getcurrenttimeinmillis() - perfT);
+
+//Code starts for Defect# by Aswini Starts
+quoteReqFnF=false;
+val = ((rACUserOrg_c == "RUS") OR (rACUserOrg_c == "RCI") OR (rACUserOrg_c == ""));
+if(val == true){ 
+	resArray = selectedDRTeamMemberArraySet_t;
+	arraysize = range(jsonarraysize(resArray));
+
+	for arr in arraysize {
+	PDL = jsonget(json(jsonarrayget(resArray ,arr )),"primaryDesignLead_DRTeamMemberAarray_t");
+	LDE = jsonget(json(jsonarrayget(resArray ,arr )),"leadDesignEngineer_DRTeamMemberAarray_t");
+	AD = jsonget(json(jsonarrayget(resArray ,arr )),"accountableDesigner_DRTeamMemberArray_t_c");
+
+		if(PDL == "true" OR LDE == "true" OR AD == "true"){
+			quoteReqFnF=true;
+			break;
+		}
+	}
+}
+
+if(quoteReqFnF == true AND fnf_requiredflag ){ // fnf_requiredflag  added by NTurpati for CR107
+result = result +"1~fFRequiredToQuote_t_c~true|";
+}
+else{
+result = result +"1~fFRequiredToQuote_t_c~false|";	
+}
+//start - CHG0103323  - Add  "CONTRACTALERT-MSBILLING"
+partJson=json();
+partsArray=jsonarray();
+if(includeMSflag AND NOT containsMSitem){
+			jsonput(partJson,"partNumber", "CONTRACTALERT-MSBILLING"); 
+			jsonput(partJson,"quantity",1); 
+			jsonarrayappend(partsArray,partJson); 
+			StickyPartsAdd = addpartstotransaction(partsArray, "_default_price_book");
+}
+if(includeMSflag AND containsMSitem AND NOT isempty(docNumbersMSitem)){
+basicURL = "https://"+_system_supplier_company_name+".bigmachines.com/rest/v12/commerceDocumentsOraclecpqoTransaction";
+authKey = "Basic cHJpeWFua2E6aTEyc0VDTjZbMw=="; 
+headerDict = dict("string");
+headerDict1 = dict("string");
+put(headerDict, "Content-Type", "application/json");
+put(headerDict1, "Content-Type", "application/json");
+selectionList = "{"
+				+"\"selections\":["+join(docNumbersMSitem,",")+"]"
+				+"}";
+deleteURL = basicURL +"/" +bs_id +"/actions/_remove_transactionLine";
+			deleteResp  = urldata(deleteURL,"POST",headerDict1,selectionList);
+}
+//End- CHG0103323
+//Code ends for Defect#32171 by Aswini Starts
+/*
+perfT = getcurrenttimeinmillis();
+result = result +"|"+ commerce.checkPricingApprovals_c("", "submit");// added by SureshThota #Defect  30990 
+logtime("PERF_8_3 commerce.checkPricingApprovals_c", getcurrenttimeinmillis() - perfT);*/
+
+//PERF_8_3: whole-function wall time. Subtract the sum of all PERF_8_3 entries above from this
+//to see how much time is NOT accounted for by BML (i.e. platform/integration overhead).
+logtime("PERF_8_3 TOTAL Save-Calculate Before Formulas", getcurrenttimeinmillis() - t);
+//print "Suresh108: Beforeformulas END"; 
+
+ 	if(_system_user_login == "nishanth.turpati@ricoh-usa.com"  ){
+ //	 	if(_system_user_login == "nishanth.turpati@ricoh-usa.com"  AND logKeyword_c <> ""){
+ print "t_pricing_perf_8_3 TOTAL  Save-Calculate Before Formulas old pricing";
+print (getcurrenttimeinmillis() - t_pricing_perf)*100000;
+   	logtime( logKeyword_c +"t_pricing_perf_8_3 TOTAL  Save-Calculate Before Formulas old pricing", getcurrenttimeinmillis() - t_pricing_perf);
+}
+
+return result;

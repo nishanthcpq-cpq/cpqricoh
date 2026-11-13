@@ -1,0 +1,47 @@
+// inputJSON = json();
+// jsonput(inputJSON,"debug",true);
+// return commerce.linePricing_c(inputJSON);
+
+
+lineDetailsJSON = inputJSON;
+debug = jsonget(inputJSON, "debug", "boolean", false);
+if (debug) {
+	params = json();
+	lineDetailsJSON = commerce.getQuoteData_c(jsontostr(params));
+}
+print lineDetailsJSON ;
+//BEGIN PIO Pricing calculation
+pIOFlag = false;//jsonpathcheck(lineDetailsJSON,"$..[?(@._model_variable_name == 'Xaas')])");
+if(pIOFlag){
+	lineDetailsJSON =commerce.calculatePricing_PIO_c(lineDetailsJSON) ;
+}
+//END PIO
+
+//BEGIN Hardware Pricing calculation
+hwFlag = true;//jsonpathcheck(lineDetailsJSON,"$..[?(@._model_variable_name == 'Hardware')])");
+if(hwFlag){
+	print "Hardware model Implemented ";
+	lineDetailsJSON = commerce.calculate_HW_Pricing_l_c(lineDetailsJSON) ;
+}
+//END Hardware
+
+
+//BEGIN MS MPS Pricing calculation
+ms_MPSFlag = true;//jsonpathcheck(lineDetailsJSON,"$..[?(@._model_variable_name == 'ms_MPS')])");
+if(ms_MPSFlag){
+	print "to be implemented";
+	//lineDetailsJSON =commerce.calculatePricing_MSMPS_c(lineDetailsJSON) ;
+}
+//END MS MPS
+
+//BEGIN ITS Pricing calculation
+ITSFlag = true;//jsonpathcheck(lineDetailsJSON,"$..[?(@._model_variable_name == 'ITS')])");
+if(ITSFlag ){
+	print "to be implemented";
+	//lineDetailsJSON =commerce.calculatePricing_ITS_c(lineDetailsJSON) ;
+}
+//END ITS 
+
+lineDetailsJSON = commerce.rollUpLinePricing_c(lineDetailsJSON) ;
+
+return lineDetailsJSON;

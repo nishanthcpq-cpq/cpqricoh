@@ -1,0 +1,47 @@
+// Check if pricingDocument has lines and is not null
+lines = jsonget(pricingDocument, "lines", "jsonarray");
+print "SURESH : DEBUGGER : PRICINGPORTAL OUTSIDE LOOP1 ";
+
+if (not(isnull(lines)) and jsonarraysize(lines) > 0) {
+    indexes = range(jsonarraysize(lines));
+    print " inside if ";
+    print pricingDocument;
+    print "NEWW";
+
+    for index in indexes {
+        // Safe access: double check array length before fetching
+        if (index < jsonarraysize(lines)) {
+            line = jsonarrayget(lines, index, "json");
+
+            partNumber = jsonget(line, "_partNumber", "string", "");
+            oracleSet = jsonget(line, "oracleSetName_PIO_c", "string", "");
+
+            print "SURESH : DEBUGGER : PRICINGPORTAL " + partNumber + " : " + oracleSet + "   :BBB ";
+            if (partNumber <> "" AND oracleSet <> "") { // added empty check to skip model Line 
+                // Query the Pricing Data matrix
+                resultSet = bmql("select uNITSRP, uNITSELLING from $_currentMatrix where partNumber = $partNumber and oracleSet = $oracleSet");
+                //  print resultSet;
+                for result in resultSet {
+                    NITSRP = atof(get(result, "uNITSRP"));
+                    NITSELLING = atof(get(result, "uNITSELLING"));
+                    //jsonput(line, "uNITSRP_PIO_c", NITSRP);
+                    //jsonput(line, "uNITSELLINGPRICE_PIO_c", NITSELLING);
+                    //jsonput(line, "uNITSRP_PIO_charge_c", NITSELLING); // added O/P Charge Attribute
+		   // jsonput(line, "uNITSRP_PIO_charge_c", NITSRP);
+		   // jsonput(line, "_price_calculation_info", line);
+		   
+		   jsonput(line, "testBOMPrice_c", NITSRP);
+
+
+
+                }
+            }
+        }
+    }
+}
+
+pricing = json();
+//sonput(pricing, "calculationInfo", pricingDocument);
+print "SURESH : DEBUGGER : PRICINGPORTAL OUTSIDE LOOP2 ";
+print pricingDocument;
+return pricingDocument;
