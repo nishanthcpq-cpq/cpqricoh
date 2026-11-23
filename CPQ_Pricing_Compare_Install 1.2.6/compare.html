@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CPQ Pricing Compare</title>
+<link rel="stylesheet" href="style.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<main>
+<header>
+  <p class="product">Oracle CPQ · v1.2.6</p>
+  <h1>Pricing Compare</h1>
+  <p>Run two pricing scenarios on a test quote and download the attribute comparison.</p>
+</header>
+<form id="compare-form">
+  <section class="card" aria-labelledby="quote-title">
+    <h2 id="quote-title">Quote and pricing</h2>
+    <label>BS Id<input name="bsId" inputmode="numeric" pattern="[0-9]{1,30}" maxlength="30" required></label>
+    <div class="grid">
+      <label>Baseline pricing<select name="baseline"><option>Old Pricing</option><option>New Pricing</option></select></label>
+      <label>Comparison pricing<select name="comparison"><option>New Pricing</option><option>Old Pricing</option></select></label>
+    </div>
+    <p class="note">Compare saves the quote twice. The second run starts from the first run’s saved state.</p>
+  </section>
+  <section class="card" aria-labelledby="connection-title">
+    <h2 id="connection-title">CPQ connection</h2>
+    <label>Saved site<select id="saved-site"><option value="">New site</option></select></label>
+    <label>CPQ site URL<input name="site" type="url" placeholder="https://your-test-site.bigmachines.com" required></label>
+    <div class="grid">
+      <label>CPQ username<input name="username" autocomplete="off" required></label>
+      <label>CPQ password<input name="password" type="password" autocomplete="off" required></label>
+    </div>
+    <label>Send requests from<select name="requestContext">
+      <option value="cpq-tab" selected>Signed-in CPQ tab</option>
+      <option value="extension">Extension tab</option>
+    </select></label>
+    <p class="note">Keep a signed-in tab open for the selected CPQ site.</p>
+    <details>
+      <summary>Commerce settings</summary>
+      <div class="grid advanced">
+        <label>Commerce process<input name="process" value="oraclecpqo" required></label>
+        <label>Header document<input name="document" value="transaction" required></label>
+        <label>Pricing action<input name="action" value="oRCL_OSC_UpdateOpportunity" required></label>
+        <label>SOAP request toggle field<input name="requestToggle" value="pricingToggle_t_c" required></label>
+        <label>SOAP response toggle field<input name="responseToggle" value="pricingToggle_t_c" required></label>
+        <label>Update SOAPAction<input name="updateSoapAction" readonly></label>
+        <label>Get SOAPAction<input name="getSoapAction" readonly></label>
+      </div>
+      <label>Additional excluded attributes<input name="exclude" placeholder="Comma-separated variable names"></label>
+      <label class="check"><input type="checkbox" name="alwaysGet"> Always retrieve a fresh transaction snapshot</label>
+    </details>
+    <div class="profile-actions"><button id="save-site" class="secondary" type="button">Save site settings</button></div>
+  </section>
+  <div class="actions"><button id="compare" type="submit">Compare &amp; download Excel</button></div>
+</form>
+<p id="status" role="status" aria-live="polite" hidden></p>
+</main>
+</body>
+</html>

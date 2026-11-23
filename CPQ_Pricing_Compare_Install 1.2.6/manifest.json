@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "CPQ Pricing Compare",
+  "version": "1.2.6",
+  "description": "Compare Old and New Oracle CPQ pricing and download an Excel report.",
+  "action": {
+    "default_title": "Open CPQ Pricing Compare"
+  },
+  "background": {
+    "service_worker": "launch.js"
+  },
+  "permissions": [
+    "storage",
+    "scripting"
+  ],
+  "optional_host_permissions": [
+    "https://*.bigmachines.com/*",
+    "https://*.oracle.com/*",
+    "https://*.oraclecloud.com/*"
+  ]
+}
